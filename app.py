@@ -262,11 +262,14 @@ with tab3:
     st.dataframe(
         display_matches[["speaker", "speaker_role", "opportunity", "opportunity_type",
                          "topic_relevance", "role_fit", "geographic_proximity",
-                         "calendar_fit", "match_score"]].style.background_gradient(
-            subset=["match_score"], cmap="YlGn"
-        ),
+                         "calendar_fit", "match_score"]],
         use_container_width=True,
         hide_index=True,
+        column_config={
+            "match_score": st.column_config.ProgressColumn(
+                "Match Score", format="%.0f%%", min_value=0, max_value=1,
+            ),
+        },
     )
 
     # Detailed match cards with explanations
