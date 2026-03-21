@@ -301,7 +301,7 @@ with tab3:
                 height=300,
                 margin=dict(l=60, r=60, t=30, b=30),
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, key=f"radar_{idx}")
 
     # Heatmap: speakers vs top opportunities
     st.subheader("Speaker-Opportunity Match Heatmap")
