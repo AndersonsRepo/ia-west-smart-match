@@ -15,15 +15,19 @@ from src.pipeline_tracker import (
 )
 from src.university_scraper import UNIVERSITY_TEMPLATES
 
-# --- Page Config ---
+# ─────────────────────────────────────────────
+# PAGE CONFIG
+# ─────────────────────────────────────────────
 st.set_page_config(
-    page_title="IA West Smart Match CRM",
+    page_title="IA West Smart Match",
     page_icon="🎯",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# --- Load Data ---
+# ─────────────────────────────────────────────
+# DATA LOADING (cached)
+# ─────────────────────────────────────────────
 @st.cache_data
 def load_data():
     return load_all()
@@ -46,63 +50,97 @@ event_matches, course_matches, all_matches = compute_all_matches(
     speakers, cpp_events, cpp_courses, event_calendar
 )
 
-# --- Sidebar ---
-st.sidebar.image("https://img.icons8.com/fluency/96/handshake.png", width=64)
-st.sidebar.title("IA West Smart Match")
-st.sidebar.markdown("**AI-Powered Volunteer-to-Opportunity Matching**")
-st.sidebar.markdown("---")
-st.sidebar.markdown(f"**{len(speakers)}** Board Members")
-st.sidebar.markdown(f"**{len(cpp_events)}** CPP Events/Programs")
-st.sidebar.markdown(f"**{len(cpp_courses)}** Course Sections")
-st.sidebar.markdown(f"**{len(event_calendar)}** Regional Events")
-st.sidebar.markdown(f"**{len(all_matches)}** Total Match Pairs Scored")
+# ─────────────────────────────────────────────
+# SIDEBAR
+# ─────────────────────────────────────────────
+# The sidebar serves as the global navigation panel. It shows the
+# project identity, key stats at a glance, and explains the matching
+# algorithm — giving judges and viewers instant context.
 
-# Algorithm info
-with st.sidebar.expander("Matching Algorithm"):
-    st.markdown("""
-    **Composite Score Formula:**
-    ```
-    SCORE = 0.35 * Topic Relevance
-          + 0.25 * Role Fit
-          + 0.20 * Geographic Proximity
-          + 0.10 * Calendar Fit
-          + 0.10 * Experience Bonus
-    ```
+with st.sidebar:
+    st.title("🎯 IA West Smart Match")
+    st.caption("AI-Powered Speaker-to-Opportunity CRM")
 
-    - **Topic**: TF-IDF cosine similarity (bigram, sublinear TF)
-    - **Role**: Keyword matching against volunteer role taxonomy
-    - **Geo**: Metro region clustering with adjacency model
-    - **Calendar**: IA event schedule overlap scoring
-    - **Experience**: Parsed from expertise tags (years, titles)
-    """)
+    st.markdown("---")
 
-# --- Tabs ---
+    # Quick stats — these 4 numbers tell the story at a glance
+    st.markdown("##### 📊 Dataset Overview")
+    c1, c2 = st.columns(2)
+    c1.metric("Board Members", len(speakers))
+    c2.metric("CPP Events", len(cpp_events))
+    c1, c2 = st.columns(2)
+    c1.metric("Course Sections", len(cpp_courses))
+    c2.metric("Regional Events", len(event_calendar))
+
+    st.metric("Total Match Pairs Scored", f"{len(all_matches):,}")
+
+    st.markdown("---")
+
+    # Algorithm explainer — judges will want to know how scoring works
+    with st.expander("🧠 How matching works", expanded=False):
+        st.markdown("""
+        **Composite Score Formula:**
+        ```
+        SCORE = 0.35 × Topic Relevance
+             + 0.25 × Role Fit
+             + 0.20 × Geographic Proximity
+             + 0.10 × Calendar Fit
+             + 0.10 × Experience Bonus
+        ```
+
+        | Component | Method |
+        |-----------|--------|
+        | **Topic** | TF-IDF cosine similarity (bigram) |
+        | **Role** | Keyword matching vs role taxonomy |
+        | **Geo** | Metro region clustering + adjacency |
+        | **Calendar** | IA event schedule overlap |
+        | **Experience** | Parsed years + seniority titles |
+        """)
+
+    st.markdown("---")
+    st.caption("CPP AI Hackathon 2026 · Built with Streamlit + scikit-learn")
+
+
+# ─────────────────────────────────────────────
+# TABS
+# ─────────────────────────────────────────────
+# Six tabs, each representing a core CRM capability.
+# For the video walkthrough, go left to right — each tab
+# builds on the previous one's context.
+
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "Speaker Profiles",
-    "Opportunities",
-    "Smart Matches",
-    "Outreach",
-    "Pipeline",
-    "Discovery",
+    "👥 Speakers",
+    "🎓 Opportunities",
+    "🎯 Smart Matches",
+    "✉️ Outreach",
+    "📈 Pipeline",
+    "🔍 Discovery",
 ])
 
-# ============================================================
-# TAB 1: Speaker Profiles
-# ============================================================
+
+# ═══════════════════════════════════════════════
+# TAB 1 — SPEAKER PROFILES
+# ═══════════════════════════════════════════════
+# This tab shows WHO is available. Each board member has
+# expertise tags, a company/title, and a metro region.
+# The region chart shows geographic distribution across
+# IA West's footprint.
+
 with tab1:
     st.header("IA West Board Members")
-    st.markdown("Speaker profiles with expertise tags, metro regions, and roles.")
+    st.caption("17 volunteer speakers with expertise tags, roles, and metro regions — the supply side of the matching equation.")
 
-    # Filters
+    # Filters row
     col1, col2 = st.columns(2)
     with col1:
         region_filter = st.multiselect(
-            "Filter by Metro Region",
+            "Filter by metro region",
             options=sorted(speakers["metro_region"].unique()),
             key="speaker_region",
         )
     with col2:
-        search = st.text_input("Search expertise tags", key="speaker_search")
+        search = st.text_input("Search expertise tags", key="speaker_search",
+                               placeholder="e.g. AI, healthcare, focus groups")
 
     filtered = speakers.copy()
     if region_filter:
@@ -110,49 +148,63 @@ with tab1:
     if search:
         filtered = filtered[filtered["expertise_tags"].str.contains(search, case=False, na=False)]
 
-    # Display cards
+    st.caption(f"Showing {len(filtered)} of {len(speakers)} members")
+
+    # Speaker cards — each expander is a mini profile card
     for _, row in filtered.iterrows():
         with st.expander(f"**{row['name']}** — {row['board_role']}", expanded=False):
             c1, c2 = st.columns([1, 2])
             with c1:
-                st.markdown(f"**Company:** {row['company']}")
-                st.markdown(f"**Title:** {row['title']}")
-                st.markdown(f"**Region:** {row['metro_region']}")
+                st.markdown(f"**🏢 Company:** {row['company']}")
+                st.markdown(f"**💼 Title:** {row['title']}")
+                st.markdown(f"**📍 Region:** {row['metro_region']}")
             with c2:
-                st.markdown("**Expertise:**")
+                st.markdown("**🏷️ Expertise:**")
                 tags = row.get("expertise_list", [])
                 tag_html = " ".join(
-                    [f'<span style="background:#e3f2fd;padding:2px 8px;border-radius:12px;margin:2px;display:inline-block;font-size:0.85em">{t}</span>' for t in tags]
+                    [f'<span style="background:#1e3a5f;color:#7ec8e3;padding:3px 10px;border-radius:12px;margin:2px;display:inline-block;font-size:0.85em">{t}</span>' for t in tags]
                 )
                 st.markdown(tag_html, unsafe_allow_html=True)
 
-                # Top matches for this speaker
+                # Top 3 matches for this speaker — shows immediate value
                 speaker_matches = all_matches[all_matches["speaker"] == row["name"]].head(3)
                 if not speaker_matches.empty:
-                    st.markdown("**Top Matches:**")
+                    st.markdown("**🎯 Top matches:**")
                     for _, m in speaker_matches.iterrows():
-                        st.markdown(f"- {m['opportunity']} ({m['opportunity_type']}) — **{m['match_score']:.0%}**")
+                        score_pct = f"{m['match_score']:.0%}"
+                        st.markdown(f"- {m['opportunity']} ({m['opportunity_type']}) — **{score_pct}**")
 
-    # Region distribution chart
-    st.subheader("Board Member Distribution by Region")
+    # Region distribution — shows the geographic spread
+    st.subheader("Geographic distribution")
     region_counts = speakers["metro_region"].value_counts().reset_index()
     region_counts.columns = ["Region", "Count"]
     fig = px.bar(region_counts, x="Region", y="Count", color="Count",
-                 color_continuous_scale="Blues", title="Board Members per Metro Region")
-    fig.update_layout(showlegend=False)
+                 color_continuous_scale="Blues", text="Count")
+    fig.update_layout(showlegend=False, height=350,
+                      margin=dict(l=0, r=0, t=10, b=0),
+                      coloraxis_showscale=False)
+    fig.update_traces(textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ============================================================
-# TAB 2: Opportunities
-# ============================================================
+# ═══════════════════════════════════════════════
+# TAB 2 — OPPORTUNITIES
+# ═══════════════════════════════════════════════
+# This tab shows WHERE speakers can contribute. Three sub-tabs:
+# CPP Events (hackathons, competitions, symposia),
+# CPP Courses (guest lecture slots ranked by fit),
+# and the IA Regional Calendar (upcoming events across the West).
+
 with tab2:
     st.header("University Opportunities")
+    st.caption("The demand side — events, courses, and regional conferences that need volunteer speakers.")
 
-    opp_subtab1, opp_subtab2, opp_subtab3 = st.tabs(["CPP Events", "CPP Courses", "IA Event Calendar"])
+    opp_sub1, opp_sub2, opp_sub3 = st.tabs(["🎪 CPP Events", "📚 CPP Courses", "🗓️ IA Calendar"])
 
-    with opp_subtab1:
-        st.subheader("Cal Poly Pomona Events & Programs")
+    with opp_sub1:
+        st.subheader("Cal Poly Pomona events & programs")
+        st.caption(f"{len(cpp_events)} events across hackathons, competitions, symposia, and workshops.")
+
         for _, row in cpp_events.iterrows():
             with st.expander(f"**{row['event_name']}** — {row['category']}"):
                 c1, c2 = st.columns(2)
@@ -161,24 +213,27 @@ with tab2:
                     st.markdown(f"**Recurrence:** {row['recurrence']}")
                     st.markdown(f"**Audience:** {row['audience']}")
                 with c2:
-                    st.markdown(f"**Volunteer Roles:** {row['volunteer_roles']}")
+                    st.markdown(f"**Volunteer roles:** {row['volunteer_roles']}")
                     st.markdown(f"**Contact:** {row['contact_name']}")
                     st.markdown(f"**Email:** {row['contact_email']}")
                     if pd.notna(row.get("url")):
-                        st.markdown(f"[Event Page]({row['url']})")
+                        st.markdown(f"[🔗 Event page]({row['url']})")
 
         # Category breakdown
         cat_counts = cpp_events["category"].value_counts().reset_index()
         cat_counts.columns = ["Category", "Count"]
         fig = px.pie(cat_counts, names="Category", values="Count",
-                     title="Events by Category", hole=0.4)
+                     title="Events by category", hole=0.45,
+                     color_discrete_sequence=px.colors.qualitative.Set2)
+        fig.update_layout(height=350, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
-    with opp_subtab2:
-        st.subheader("CPP Marketing Course Sections")
+    with opp_sub2:
+        st.subheader("CPP marketing course sections")
+        st.caption("Each course is rated for guest lecture fit based on curriculum alignment.")
 
         fit_filter = st.multiselect(
-            "Filter by Guest Lecture Fit",
+            "Filter by guest lecture fit",
             options=["High", "Medium", "Low"],
             default=["High", "Medium"],
             key="course_fit",
@@ -190,6 +245,10 @@ with tab2:
                              "end_time", "enrollment_cap", "mode", "guest_lecture_fit"]],
             use_container_width=True,
             hide_index=True,
+            column_config={
+                "enrollment_cap": st.column_config.NumberColumn("Enrollment Cap"),
+                "guest_lecture_fit": st.column_config.TextColumn("Fit Level"),
+            },
         )
 
         # Fit distribution
@@ -197,11 +256,15 @@ with tab2:
         fit_counts.columns = ["Fit Level", "Count"]
         fig = px.bar(fit_counts, x="Fit Level", y="Count", color="Fit Level",
                      color_discrete_map={"High": "#28a745", "Medium": "#ffc107", "Low": "#dc3545"},
-                     title="Course Sections by Guest Lecture Fit")
+                     text="Count")
+        fig.update_layout(showlegend=False, height=300,
+                          margin=dict(l=0, r=0, t=10, b=0))
+        fig.update_traces(textposition="outside")
         st.plotly_chart(fig, use_container_width=True)
 
-    with opp_subtab3:
-        st.subheader("IA West 2026 Regional Event Calendar")
+    with opp_sub3:
+        st.subheader("IA West 2026 regional event calendar")
+        st.caption("Upcoming IA events with suggested lecture windows for nearby universities.")
 
         cal_display = event_calendar.copy()
         cal_display["event_date"] = cal_display["event_date"].dt.strftime("%B %d, %Y")
@@ -212,53 +275,60 @@ with tab2:
             hide_index=True,
         )
 
-        # Timeline
+        # Timeline visualization
         fig = px.timeline(
             event_calendar.assign(
                 end=event_calendar["event_date"] + pd.Timedelta(days=1),
                 label=event_calendar["region"],
             ),
             x_start="event_date", x_end="end", y="label",
-            title="2026 IA West Event Timeline",
             color="region",
+            color_discrete_sequence=px.colors.qualitative.Set2,
         )
-        fig.update_layout(showlegend=False, yaxis_title="Region")
+        fig.update_layout(showlegend=False, yaxis_title="",
+                          height=300, margin=dict(l=0, r=0, t=10, b=0))
         st.plotly_chart(fig, use_container_width=True)
 
 
-# ============================================================
-# TAB 3: Smart Matches
-# ============================================================
+# ═══════════════════════════════════════════════
+# TAB 3 — SMART MATCHES
+# ═══════════════════════════════════════════════
+# This is the CORE of the product. The matching engine scores
+# every speaker × opportunity pair using a 5-component weighted
+# algorithm. This tab shows the ranked results, lets you filter,
+# and provides detailed breakdowns with radar charts.
+
 with tab3:
     st.header("Smart Match Recommendations")
-    st.markdown("""
-    Matches are scored using a weighted composite algorithm:
-    `SCORE = 0.35 x Topic Relevance + 0.25 x Role Fit + 0.20 x Geographic Proximity + 0.10 x Calendar Fit + 0.10 x Experience Bonus`
-    """)
+    st.caption("Every speaker scored against every opportunity — ranked by composite match score.")
 
-    # Filters
+    # Filters row
     col1, col2, col3 = st.columns(3)
     with col1:
-        match_type = st.selectbox("Opportunity Type", ["All", "event", "course"])
+        match_type = st.selectbox("Opportunity type", ["All", "event", "course"])
     with col2:
-        min_score = st.slider("Minimum Match Score", 0.0, 1.0, 0.3, 0.05)
+        min_score = st.slider("Minimum score", 0.0, 1.0, 0.3, 0.05)
     with col3:
-        top_n = st.number_input("Show Top N", min_value=5, max_value=100, value=20)
+        top_n = st.number_input("Show top N", min_value=5, max_value=100, value=20)
 
     display_matches = all_matches.copy()
     if match_type != "All":
         display_matches = display_matches[display_matches["opportunity_type"] == match_type]
     display_matches = display_matches[display_matches["match_score"] >= min_score].head(top_n)
 
-    # Score distribution
+    # Score distribution — shows the bell curve of all match scores
+    st.subheader("Score distribution")
+    st.caption("How match scores are distributed across all speaker-opportunity pairs.")
     fig = px.histogram(all_matches, x="match_score", nbins=30,
                        color="opportunity_type", barmode="overlay",
-                       title="Match Score Distribution",
-                       labels={"match_score": "Match Score", "opportunity_type": "Type"})
+                       labels={"match_score": "Match Score", "opportunity_type": "Type"},
+                       color_discrete_map={"event": "#007bff", "course": "#28a745"})
+    fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02))
     st.plotly_chart(fig, use_container_width=True)
 
-    # Top matches table
-    st.subheader(f"Top {len(display_matches)} Matches")
+    # Top matches table — the ranked leaderboard
+    st.subheader(f"Top {len(display_matches)} matches")
     st.dataframe(
         display_matches[["speaker", "speaker_role", "opportunity", "opportunity_type",
                          "topic_relevance", "role_fit", "geographic_proximity",
@@ -269,42 +339,65 @@ with tab3:
             "match_score": st.column_config.ProgressColumn(
                 "Match Score", format="%.0f%%", min_value=0, max_value=1,
             ),
+            "topic_relevance": st.column_config.ProgressColumn(
+                "Topic", format="%.0f%%", min_value=0, max_value=1,
+            ),
+            "role_fit": st.column_config.ProgressColumn(
+                "Role Fit", format="%.0f%%", min_value=0, max_value=1,
+            ),
+            "geographic_proximity": st.column_config.ProgressColumn(
+                "Geo", format="%.0f%%", min_value=0, max_value=1,
+            ),
+            "calendar_fit": st.column_config.ProgressColumn(
+                "Calendar", format="%.0f%%", min_value=0, max_value=1,
+            ),
         },
     )
 
-    # Detailed match cards with explanations
-    st.subheader("Match Details & Explanations")
+    # Detailed match explanations with radar charts
+    st.subheader("Match details & explanations")
+    st.caption("Click any match to see why the algorithm recommended it.")
     for idx, row in display_matches.head(10).iterrows():
+        score_pct = f"{row['match_score']:.0%}"
         with st.expander(
-            f"**{row['speaker']}** -> {row['opportunity']} ({row['match_score']:.0%})"
+            f"**{row['speaker']}** → {row['opportunity']} ({score_pct})"
         ):
-            explanation = explain_match(row)
-            st.markdown(explanation)
+            c1, c2 = st.columns([3, 2])
+            with c1:
+                explanation = explain_match(row)
+                st.markdown(explanation)
+            with c2:
+                # Radar chart — visual breakdown of the 5 scoring components
+                categories = ["Topic", "Role Fit", "Geography", "Calendar", "Experience"]
+                values = [row["topic_relevance"], row["role_fit"],
+                          row["geographic_proximity"], row["calendar_fit"],
+                          row["historical_bonus"]]
 
-            # Score breakdown radar
-            categories = ["Topic\nRelevance", "Role\nFit", "Geographic\nProximity",
-                          "Calendar\nFit", "Experience\nBonus"]
-            values = [row["topic_relevance"], row["role_fit"],
-                      row["geographic_proximity"], row["calendar_fit"],
-                      row["historical_bonus"]]
+                fig = go.Figure(data=go.Scatterpolar(
+                    r=values + [values[0]],
+                    theta=categories + [categories[0]],
+                    fill="toself",
+                    fillcolor="rgba(0,123,255,0.2)",
+                    line=dict(color="#007bff", width=2),
+                ))
+                fig.update_layout(
+                    polar=dict(
+                        radialaxis=dict(visible=True, range=[0, 1],
+                                        gridcolor="rgba(255,255,255,0.1)"),
+                        angularaxis=dict(gridcolor="rgba(255,255,255,0.1)"),
+                        bgcolor="rgba(0,0,0,0)",
+                    ),
+                    showlegend=False,
+                    height=280,
+                    margin=dict(l=50, r=50, t=20, b=20),
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(0,0,0,0)",
+                )
+                st.plotly_chart(fig, use_container_width=True, key=f"radar_{idx}")
 
-            fig = go.Figure(data=go.Scatterpolar(
-                r=values + [values[0]],
-                theta=categories + [categories[0]],
-                fill="toself",
-                fillcolor="rgba(0,123,255,0.15)",
-                line=dict(color="#007bff"),
-            ))
-            fig.update_layout(
-                polar=dict(radialaxis=dict(visible=True, range=[0, 1])),
-                showlegend=False,
-                height=300,
-                margin=dict(l=60, r=60, t=30, b=30),
-            )
-            st.plotly_chart(fig, use_container_width=True, key=f"radar_{idx}")
-
-    # Heatmap: speakers vs top opportunities
-    st.subheader("Speaker-Opportunity Match Heatmap")
+    # Heatmap — birds-eye view of speaker × opportunity scores
+    st.subheader("Speaker × Opportunity heatmap")
+    st.caption("Top 8 opportunities by average score — darker = stronger match.")
     top_opps = all_matches.groupby("opportunity")["match_score"].mean().nlargest(8).index.tolist()
     heatmap_data = all_matches[all_matches["opportunity"].isin(top_opps)]
     pivot = heatmap_data.pivot_table(
@@ -312,30 +405,34 @@ with tab3:
     )
     fig = px.imshow(
         pivot, color_continuous_scale="YlGn", aspect="auto",
-        title="Match Score Heatmap (Top 8 Opportunities)",
         labels={"color": "Score"},
     )
-    fig.update_layout(height=500)
+    fig.update_layout(height=500, margin=dict(l=0, r=0, t=10, b=0))
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ============================================================
-# TAB 4: Outreach
-# ============================================================
+# ═══════════════════════════════════════════════
+# TAB 4 — OUTREACH
+# ═══════════════════════════════════════════════
+# Once you've identified the best matches, this tab generates
+# personalized outreach emails. Each email is pre-filled with
+# the speaker's expertise, the opportunity details, and
+# specific reasons why this match makes sense.
+
 with tab4:
     st.header("Outreach Email Generator")
-    st.markdown("Generate personalized outreach emails for top matches.")
+    st.caption("Generate personalized invitation emails for your top matches — ready to send.")
 
     col1, col2 = st.columns(2)
     with col1:
         selected_speaker = st.selectbox(
-            "Select Speaker",
+            "Select speaker",
             options=["All"] + sorted(speakers["name"].tolist()),
             key="outreach_speaker",
         )
     with col2:
         outreach_type = st.selectbox(
-            "Opportunity Type",
+            "Opportunity type",
             options=["event", "course"],
             key="outreach_type",
         )
@@ -349,13 +446,11 @@ with tab4:
         st.info("No matches found for the selected filters.")
     else:
         for _, match_row in outreach_matches.iterrows():
-            # Enrich match data with speaker details
             speaker_data = speakers[speakers["name"] == match_row["speaker"]].iloc[0]
             enriched = match_row.to_dict()
             enriched["speaker_title"] = speaker_data.get("title", "")
             enriched["speaker_company"] = speaker_data.get("company", "")
 
-            # Get opportunity data for template
             opp_data = {}
             if outreach_type == "event":
                 opp_rows = cpp_events[cpp_events["event_name"] == match_row["opportunity"]]
@@ -367,13 +462,14 @@ with tab4:
                     opp_data = opp_rows.iloc[0].to_dict()
 
             email = generate_outreach(enriched, opp_data, outreach_type)
+            score_pct = f"{match_row['match_score']:.0%}"
 
             with st.expander(
-                f"Email: {match_row['speaker']} -> {match_row['opportunity']} ({match_row['match_score']:.0%})"
+                f"✉️ {match_row['speaker']} → {match_row['opportunity']} ({score_pct})"
             ):
                 st.code(email, language=None)
                 st.download_button(
-                    label="Download Email Draft",
+                    label="📥 Download draft",
                     data=email,
                     file_name=f"outreach_{match_row['speaker'].replace(' ', '_')}_{match_row['opportunity'][:30].replace(' ', '_')}.txt",
                     mime="text/plain",
@@ -381,63 +477,69 @@ with tab4:
                 )
 
 
-# ============================================================
-# TAB 5: Pipeline
-# ============================================================
+# ═══════════════════════════════════════════════
+# TAB 5 — PIPELINE
+# ═══════════════════════════════════════════════
+# This tab tracks the engagement funnel — from initial match
+# identification all the way to IA membership conversion.
+# It shows where speakers are in the pipeline, conversion
+# rates at each stage, and comparisons to industry benchmarks.
+
 with tab5:
     st.header("Engagement Pipeline")
-    st.markdown("Track the journey from opportunity identification to IA membership conversion.")
+    st.caption("Track the journey from opportunity identification to IA membership conversion.")
 
     pipeline = generate_mock_pipeline(speakers, cpp_events)
     summary = get_pipeline_summary(pipeline)
     funnel = get_funnel_data(pipeline)
 
-    # KPI row
+    # KPI row — the 4 numbers that matter most
     k1, k2, k3, k4 = st.columns(4)
-    k1.metric("Total Pipeline Entries", summary["total_entries"])
+    k1.metric("Total Entries", summary["total_entries"])
     k2.metric("Active Pipeline", summary["active_pipeline"])
     k3.metric("Conversion Rate", f"{summary['conversion_rate']:.1%}")
-    k4.metric("Unique Speakers Engaged", summary["unique_speakers"])
+    k4.metric("Speakers Engaged", summary["unique_speakers"])
 
-    # Funnel chart
-    st.subheader("Conversion Funnel")
-    fig = go.Figure(go.Funnel(
-        y=funnel["stage"],
-        x=funnel["count"],
-        textinfo="value+percent initial",
-        marker=dict(color=[STAGE_COLORS[s] for s in funnel["stage"]]),
-    ))
-    fig.update_layout(height=400, margin=dict(l=10, r=10, t=30, b=10))
-    st.plotly_chart(fig, use_container_width=True)
+    # Two-column layout: funnel + conversion rates side by side
+    col1, col2 = st.columns(2)
 
-    # Stage-to-stage conversion rates
-    st.subheader("Stage-to-Stage Conversion Rates")
-    conversions = summary["stage_conversions"]
-    conv_df = pd.DataFrame(conversions)
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=[f"{c['from']} -> {c['to']}" for c in conversions],
-        y=[c['rate'] for c in conversions],
-        name="Observed",
-        marker_color="#007bff",
-    ))
-    fig.add_trace(go.Scatter(
-        x=[f"{c['from']} -> {c['to']}" for c in conversions],
-        y=[c['benchmark'] for c in conversions],
-        name="Benchmark",
-        mode="markers+lines",
-        marker=dict(color="#dc3545", size=10),
-        line=dict(dash="dash"),
-    ))
-    fig.update_layout(
-        yaxis_title="Conversion Rate",
-        yaxis_tickformat=".0%",
-        height=350,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    with col1:
+        st.subheader("Conversion funnel")
+        fig = go.Figure(go.Funnel(
+            y=funnel["stage"],
+            x=funnel["count"],
+            textinfo="value+percent initial",
+            marker=dict(color=[STAGE_COLORS[s] for s in funnel["stage"]]),
+        ))
+        fig.update_layout(height=400, margin=dict(l=10, r=10, t=10, b=10))
+        st.plotly_chart(fig, use_container_width=True)
 
-    # Sub-tabs for per-speaker, per-event-type, per-region
+    with col2:
+        st.subheader("Stage conversion vs benchmark")
+        conversions = summary["stage_conversions"]
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=[f"{c['from']} →\n{c['to']}" for c in conversions],
+            y=[c['rate'] for c in conversions],
+            name="Actual",
+            marker_color="#007bff",
+        ))
+        fig.add_trace(go.Scatter(
+            x=[f"{c['from']} →\n{c['to']}" for c in conversions],
+            y=[c['benchmark'] for c in conversions],
+            name="Benchmark",
+            mode="markers+lines",
+            marker=dict(color="#ff6b6b", size=8),
+            line=dict(dash="dash", color="#ff6b6b"),
+        ))
+        fig.update_layout(
+            yaxis_title="Rate", yaxis_tickformat=".0%",
+            height=400, margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Breakdowns by speaker, event type, and region
     pipe_sub1, pipe_sub2, pipe_sub3 = st.tabs([
         "By Speaker", "By Event Type", "By Region"
     ])
@@ -452,92 +554,97 @@ with tab5:
                 }),
                 use_container_width=True,
                 hide_index=True,
+                column_config={
+                    "Avg Progress": st.column_config.ProgressColumn(
+                        "Avg Progress", min_value=0, max_value=7,
+                    ),
+                },
             )
             fig = px.bar(speaker_metrics.head(10), x="speaker", y="avg_stage_index",
-                         color="furthest_stage", title="Top 10 Speakers by Pipeline Progress",
+                         color="furthest_stage", title="Top 10 speakers by pipeline progress",
                          labels={"avg_stage_index": "Avg Stage Progress"})
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(height=350, margin=dict(l=0, r=0, t=40, b=0))
+            st.plotly_chart(fig, use_container_width=True, key="pipe_speaker_chart")
 
     with pipe_sub2:
         event_metrics = get_metrics_by_event_type(pipeline)
         if not event_metrics.empty:
             st.dataframe(
-                event_metrics.rename(columns={
-                    "avg_stage_index": "Avg Progress"
-                }),
+                event_metrics.rename(columns={"avg_stage_index": "Avg Progress"}),
                 use_container_width=True,
                 hide_index=True,
             )
             fig = px.bar(event_metrics, x="event_type", y="conversion_rate",
                          color="event_type",
-                         title="Conversion Rate by Event Type",
+                         title="Conversion rate by event type",
                          labels={"conversion_rate": "Conversion Rate"})
-            fig.update_layout(yaxis_tickformat=".0%", showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(yaxis_tickformat=".0%", showlegend=False,
+                              height=350, margin=dict(l=0, r=0, t=40, b=0))
+            st.plotly_chart(fig, use_container_width=True, key="pipe_event_chart")
 
     with pipe_sub3:
         region_metrics = get_metrics_by_region(pipeline)
         if not region_metrics.empty:
             st.dataframe(
-                region_metrics.rename(columns={
-                    "avg_stage_index": "Avg Progress"
-                }),
+                region_metrics.rename(columns={"avg_stage_index": "Avg Progress"}),
                 use_container_width=True,
                 hide_index=True,
             )
             fig = px.bar(region_metrics, x="region", y="total_entries",
                          color="conversion_rate",
                          color_continuous_scale="YlGn",
-                         title="Pipeline Entries by Region (colored by conversion rate)")
-            st.plotly_chart(fig, use_container_width=True)
+                         title="Pipeline entries by region (colored by conversion rate)")
+            fig.update_layout(height=350, margin=dict(l=0, r=0, t=40, b=0))
+            st.plotly_chart(fig, use_container_width=True, key="pipe_region_chart")
 
-    # Stage breakdown
-    st.subheader("Pipeline by Stage")
+    # Stage breakdown bar
+    st.subheader("Pipeline by stage")
     stage_df = pd.DataFrame([
         {"Stage": stage, "Count": summary["by_stage"].get(stage, 0)}
         for stage in PIPELINE_STAGES
     ])
     fig = px.bar(stage_df, x="Stage", y="Count", color="Stage",
-                 color_discrete_map=STAGE_COLORS,
-                 title="Pipeline Entries by Stage")
-    fig.update_layout(showlegend=False)
+                 color_discrete_map=STAGE_COLORS, text="Count")
+    fig.update_layout(showlegend=False, height=300,
+                      margin=dict(l=0, r=0, t=10, b=0))
+    fig.update_traces(textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
 
     # Detailed pipeline table
-    st.subheader("Pipeline Details")
-    stage_filter = st.multiselect(
-        "Filter by Stage",
-        options=PIPELINE_STAGES,
-        default=PIPELINE_STAGES,
-        key="pipeline_stage",
-    )
-    filtered_pipeline = pipeline[pipeline["stage"].isin(stage_filter)]
-    st.dataframe(
-        filtered_pipeline[["id", "speaker", "opportunity", "stage",
-                          "entry_date", "last_updated", "notes"]],
-        use_container_width=True,
-        hide_index=True,
-    )
+    with st.expander("📋 Full pipeline details"):
+        stage_filter = st.multiselect(
+            "Filter by stage",
+            options=PIPELINE_STAGES,
+            default=PIPELINE_STAGES,
+            key="pipeline_stage",
+        )
+        filtered_pipeline = pipeline[pipeline["stage"].isin(stage_filter)]
+        st.dataframe(
+            filtered_pipeline[["id", "speaker", "opportunity", "stage",
+                              "entry_date", "last_updated", "notes"]],
+            use_container_width=True,
+            hide_index=True,
+        )
 
 
-# ============================================================
-# TAB 6: Discovery
-# ============================================================
+# ═══════════════════════════════════════════════
+# TAB 6 — DISCOVERY
+# ═══════════════════════════════════════════════
+# This tab shows the opportunity DISCOVERY engine — it
+# identifies new volunteer opportunities at universities
+# across IA West's regional footprint. Combines real CSV
+# data with web scraping templates for scalable expansion.
+
 with tab6:
     st.header("Opportunity Discovery Engine")
-    st.markdown("""
-    Automated discovery engine that identifies new volunteer opportunities
-    at universities across IA West's regional footprint. Uses real CSV data
-    from CPP events, courses, and IA regional calendar.
-    """)
+    st.caption("Automated discovery of new volunteer opportunities across IA West's university network.")
 
     disc_sub1, disc_sub2, disc_sub3 = st.tabs([
-        "Discovered Opportunities", "Scraping Templates", "Expansion Roadmap"
+        "🔎 Discoveries", "🕷️ Scraping Templates", "🗺️ Expansion Roadmap"
     ])
 
     with disc_sub1:
         discoveries = run_discovery_simulation()
-        # Split real vs scan targets
         real_discoveries = discoveries[discoveries["status"] != "Queued"]
         scan_targets = discoveries[discoveries["status"] == "Queued"]
         stats = get_discovery_stats(discoveries)
@@ -549,54 +656,61 @@ with tab6:
         d3.metric("High-Fit Matches", stats["high_fit_count"])
         d4.metric("Scan Targets Queued", stats["scan_targets"])
 
-        # Results by region
-        st.subheader("Discoveries by Region")
-        region_df = pd.DataFrame([
-            {"Region": k, "Opportunities": v} for k, v in stats["by_region"].items()
-        ])
-        if not region_df.empty:
-            fig = px.bar(region_df, x="Region", y="Opportunities", color="Region",
-                         title="Discovered Opportunities by Region")
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Results by type
+        # Two-column: by region + by type
         col1, col2 = st.columns(2)
         with col1:
+            region_df = pd.DataFrame([
+                {"Region": k, "Opportunities": v} for k, v in stats["by_region"].items()
+            ])
+            if not region_df.empty:
+                fig = px.bar(region_df, x="Region", y="Opportunities", color="Region",
+                             color_discrete_sequence=px.colors.qualitative.Set2,
+                             text="Opportunities")
+                fig.update_layout(showlegend=False, height=300,
+                                  margin=dict(l=0, r=0, t=10, b=0))
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
             type_df = pd.DataFrame([
                 {"Type": k, "Count": v} for k, v in stats["by_type"].items()
             ])
             if not type_df.empty:
                 fig = px.pie(type_df, names="Type", values="Count",
-                             title="By Opportunity Type", hole=0.4)
+                             hole=0.45,
+                             color_discrete_sequence=px.colors.qualitative.Set2)
+                fig.update_layout(height=300, margin=dict(l=0, r=0, t=10, b=0))
                 st.plotly_chart(fig, use_container_width=True)
 
-        with col2:
-            if not real_discoveries.empty and "fit_level" in real_discoveries.columns:
-                fit_df = real_discoveries["fit_level"].value_counts().reset_index()
-                fit_df.columns = ["Fit Level", "Count"]
-                fig = px.pie(fit_df, names="Fit Level", values="Count",
-                             title="By Fit Level", hole=0.4,
-                             color_discrete_map={"High": "#28a745", "Medium": "#ffc107", "Low": "#dc3545"})
-                st.plotly_chart(fig, use_container_width=True)
+        # Fit level breakdown
+        if not real_discoveries.empty and "fit_level" in real_discoveries.columns:
+            fit_df = real_discoveries["fit_level"].value_counts().reset_index()
+            fit_df.columns = ["Fit Level", "Count"]
+            st.subheader("Fit level breakdown")
+            c1, c2, c3 = st.columns(3)
+            for i, (_, r) in enumerate(fit_df.iterrows()):
+                col = [c1, c2, c3][i % 3]
+                col.metric(f"{r['Fit Level']} Fit", r["Count"])
 
         # By university
-        st.subheader("Opportunities by University")
         if "by_university" in stats and stats["by_university"]:
+            st.subheader("By university")
             uni_df = pd.DataFrame([
                 {"University": k, "Count": v}
                 for k, v in stats["by_university"].items()
             ]).sort_values("Count", ascending=False)
             fig = px.bar(uni_df, x="University", y="Count", color="Count",
-                         color_continuous_scale="Blues",
-                         title="Opportunities Found per University")
-            fig.update_layout(showlegend=False)
+                         color_continuous_scale="Blues", text="Count")
+            fig.update_layout(showlegend=False, height=350,
+                              margin=dict(l=0, r=0, t=10, b=0),
+                              coloraxis_showscale=False)
+            fig.update_traces(textposition="outside")
             st.plotly_chart(fig, use_container_width=True)
 
-        # Detailed results
-        st.subheader("All Discovered Opportunities")
+        # Results table
+        st.subheader("All discovered opportunities")
         uni_filter = st.multiselect(
-            "Filter by University",
+            "Filter by university",
             options=sorted(real_discoveries["university"].unique()) if not real_discoveries.empty else [],
             key="disc_uni",
         )
@@ -610,30 +724,25 @@ with tab6:
             )
 
     with disc_sub2:
-        st.subheader("University Scraping Templates")
-        st.markdown("""
-        Each university has a configured scraping template with URL patterns
-        and HTML selectors. In production, these templates enable automated
-        discovery of new events and courses at scale.
-        """)
+        st.subheader("University scraping templates")
+        st.caption("Pre-configured web scraping templates for each university — URL patterns and HTML selectors for automated discovery.")
 
         for tmpl in UNIVERSITY_TEMPLATES:
-            with st.expander(f"**{tmpl.name}** ({tmpl.region})"):
-                st.markdown(f"**Base URL:** `{tmpl.base_url}`")
-                st.markdown(f"**Department:** {tmpl.department}")
-                st.markdown("**Event Pages to Scan:**")
+            with st.expander(f"**{tmpl.name}** — {tmpl.region}"):
+                st.markdown(f"**🌐 Base URL:** `{tmpl.base_url}`")
+                st.markdown(f"**🏛️ Department:** {tmpl.department}")
+                st.markdown("**📄 Event pages:**")
                 for url in tmpl.get_event_urls():
                     st.markdown(f"- `{url}`")
                 if tmpl.course_catalog_url:
-                    st.markdown(f"**Course Catalog:** `{tmpl.course_catalog_url}`")
+                    st.markdown(f"**📚 Course catalog:** `{tmpl.course_catalog_url}`")
                 if tmpl.selectors:
-                    st.markdown("**HTML Selectors:**")
+                    st.markdown("**🔧 HTML selectors:**")
                     for key, sel in tmpl.selectors.items():
                         st.markdown(f"- `{key}`: `{sel}`")
 
-        # Show scan targets
         if not scan_targets.empty:
-            st.subheader("Queued Scan Targets")
+            st.subheader("Queued scan targets")
             st.dataframe(
                 scan_targets[["university", "region", "opportunity_name",
                               "description", "status"]].rename(columns={
@@ -644,26 +753,23 @@ with tab6:
             )
 
     with disc_sub3:
-        st.subheader("University Expansion Roadmap")
-        roadmap = get_expansion_roadmap()
-        for phase in roadmap:
-            priority_color = {"Immediate": "red", "High": "orange", "Medium": "blue"}.get(
-                phase["priority"], "gray"
+        st.subheader("University expansion roadmap")
+        st.caption("Phased rollout plan for expanding IA West's university network.")
+
+        for phase in get_expansion_roadmap():
+            priority_color = {"Immediate": "🔴", "High": "🟠", "Medium": "🔵"}.get(
+                phase["priority"], "⚪"
             )
-            template_status = "Template Ready" if phase.get("template_ready") else "Template Needed"
-            with st.expander(f"**{phase['phase']}** — {phase['region']} (Priority: {phase['priority']})"):
+            template_status = "✅ Template ready" if phase.get("template_ready") else "⬜ Template needed"
+            with st.expander(f"{priority_color} **{phase['phase']}** — {phase['region']}"):
                 st.markdown(f"**Universities:** {', '.join(phase['universities'])}")
                 st.markdown(f"**Rationale:** {phase['rationale']}")
-                st.markdown(f"**Estimated Opportunities:** {phase['estimated_opportunities']}")
-                st.markdown(f"**Scraping Template:** {template_status}")
+                st.markdown(f"**Estimated opportunities:** {phase['estimated_opportunities']}")
+                st.markdown(f"**Template status:** {template_status}")
 
 
-# --- Footer ---
-st.markdown("---")
-st.markdown(
-    "<div style='text-align:center;color:#888;font-size:0.85em'>"
-    "IA West Smart Match CRM | CPP AI Hackathon 2026 | "
-    "Built with Streamlit + scikit-learn + TF-IDF Cosine Similarity"
-    "</div>",
-    unsafe_allow_html=True,
-)
+# ─────────────────────────────────────────────
+# FOOTER
+# ─────────────────────────────────────────────
+st.caption("---")
+st.caption("IA West Smart Match CRM · CPP AI Hackathon 2026 · Streamlit + scikit-learn + TF-IDF")

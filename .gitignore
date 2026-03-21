@@ -6,5 +6,5 @@ venv/
 *.egg-info/
 dist/
 build/
-.streamlit/
+# .streamlit/ — needed for theme config on Streamlit Cloud
 .DS_Store
