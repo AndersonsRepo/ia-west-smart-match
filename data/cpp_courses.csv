@@ -1,0 +1,36 @@
+Instructor,Course,Section,Title,Days,Start Time,End Time,Enrl Cap,Mode,Guest Lecture Fit
+Chie Ishihara,IBM 4121,01,Intl Marketing Research,T,5:30 PM,8:15 PM,30,Face-to-Face,High
+Megan Good,IBM 3302,02,Marketing Research,T TH,8:30 AM,9:45 AM,30,Face-to-Face,High
+Yufan Lin,IBM 3302,03,Marketing Research,T,2:30 PM,3:45 PM,30,Hybrid Sync,High
+Yufan Lin,GBA 6520,02,Marketing Mgmt Applications,T,7:00 PM,9:45 PM,45,Hybrid Sync,High
+Maha Ghosn,GBA 6830,01,Business Research Methods,TH,7:00 PM,9:45 PM,45,Hybrid Async,High
+Maha Ghosn,IBM 3202,03,Market Analysis and Control,T,2:30 PM,3:45 PM,30,Hybrid Sync,High
+Maha Ghosn,IBM 3202,04,Market Analysis and Control,T,4:00 PM,5:15 PM,30,Hybrid Sync,High
+Olga Di Franco,IBM 4112,01,Consumer Behavior,M,1:00 PM,2:15 PM,40,Hybrid Sync,High
+Olga Di Franco,IBM 4112,02,Consumer Behavior,M,2:30 PM,3:45 PM,40,Hybrid Sync,High
+L. Lin Ong,IBM 4112,04,Consumer Behavior,T,8:30 AM,9:45 AM,30,Hybrid Sync,High
+Elif Ozkaya,IBM 3072,01,Promotional Strategies,T TH,4:00 PM,5:15 PM,30,Face-to-Face,Medium
+Elif Ozkaya,IBM 3072,04,Promotional Strategies,T TH,2:30 PM,3:45 PM,30,Face-to-Face,Medium
+Paul-Long Lee,IBM 3072,02,Promotional Strategies,M W,7:00 PM,8:15 PM,30,Face-to-Face,Medium
+Elif Ozkaya,IBM 4032,01,E-marketing,T TH,10:00 AM,11:15 AM,30,Face-to-Face,Medium
+Wendy Bendoni,IBM 4032,02,E-marketing,W,8:30 AM,9:45 AM,30,Hybrid Async,Medium
+Lydia Chen Shah,IBM 4032,03,E-marketing,M,2:30 PM,3:45 PM,30,Hybrid Sync,Medium
+Lydia Chen Shah,IBM 3262S,01,Interactive Marketing Svc Lrng,T,1:00 PM,2:15 PM,30,Hybrid Sync,Medium
+Lydia Chen Shah,IBM 3262S,02,Interactive Marketing Svc Lrng,M,1:00 PM,2:15 PM,30,Hybrid Sync,Medium
+Lydia Chen Shah,GBA 6400S,01,Sustainable Dvlpmnt Mkt Svc Lr,T,7:00 PM,9:45 PM,30,Hybrid Async,Medium
+In Hye Kang,IBM 3282,01,Social Media Marketing,M,10:00 AM,11:15 AM,30,Face-to-Face,Medium
+Michael Becker,IBM 3292,01,Mobile Marketing,T TH,5:30 PM,6:45 PM,30,Fully Sync,Medium
+Megan Good,IBM 3062,02,Professional Selling,T TH,10:00 AM,11:15 AM,30,Face-to-Face,Medium
+Michael Assumma,IBM 4212,01,Marketing Problems,T,5:30 PM,6:45 PM,30,Hybrid Sync,Medium
+Jenny Feng,IBM 4212,02,Marketing Problems,M,5:30 PM,6:45 PM,35,Hybrid Sync,Medium
+Jenny Feng,IBM 4212,03,Marketing Problems,M,7:00 PM,8:15 PM,35,Hybrid Sync,Medium
+Neha Singh,IBM 4141,01,International Marketing,M,10:00 AM,11:15 AM,30,Hybrid Sync,Medium
+Ali Kowsari,IBM 4161,02,International Exporting,T,1:00 PM,2:15 PM,30,Hybrid Sync,Low
+Ali Kowsari,IBM 4291,01,International Logistics,T,2:30 PM,3:45 PM,30,Hybrid Sync,Low
+Fan Wang,IBM 4161,01,International Exporting,M W,2:30 PM,3:45 PM,30,Face-to-Face,Low
+Fan Wang,IBM 4801,01,Intl Business Strategy,M W,10:00 AM,11:15 AM,40,Face-to-Face,Low
+Olga Di Franco,IBM 3001,01,Principles of Global Business,M,5:30 PM,6:45 PM,30,Hybrid Sync,Low
+L. Lin Ong,IBM 3001,02,Principles of Global Business,T,10:00 AM,11:15 AM,30,Hybrid Sync,Low
+Maha Ghosn,IBM 3012,07,Principles of Marketing Mgmt,M W,5:30 PM,6:45 PM,77,Face-to-Face,Low
+Michael Assumma,IBM 3012,05,Principles of Marketing Mgmt,TH,7:00 PM,9:45 PM,40,Face-to-Face,Low
+Michael Assumma,IBM 3012,06,Principles of Marketing Mgmt,T,7:00 PM,9:45 PM,40,Face-to-Face,Low
