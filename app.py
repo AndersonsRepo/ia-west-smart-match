@@ -586,30 +586,34 @@ with tab3:
 
     # Ranked leaderboard
     st.markdown(f'<div class="section-header">🏆 Top {len(display_matches)} Matches</div>', unsafe_allow_html=True)
+    score_cols = ["topic_relevance", "role_fit", "geographic_proximity",
+                  "calendar_fit", "student_interest", "match_score"]
+    leaderboard = display_matches[["volunteer", "volunteer_role", "opportunity",
+                                    "opportunity_type"] + score_cols].copy()
+    for col in score_cols:
+        leaderboard[col] = (leaderboard[col] * 100).round(0)
     st.dataframe(
-        display_matches[["volunteer", "volunteer_role", "opportunity", "opportunity_type",
-                         "topic_relevance", "role_fit", "geographic_proximity",
-                         "calendar_fit", "student_interest", "match_score"]],
+        leaderboard,
         use_container_width=True,
         hide_index=True,
         column_config={
             "match_score": st.column_config.ProgressColumn(
-                "Match Score", format="%.0f%%", min_value=0, max_value=1,
+                "Match Score", format="%.0f%%", min_value=0, max_value=100,
             ),
             "topic_relevance": st.column_config.ProgressColumn(
-                "Topic", format="%.0f%%", min_value=0, max_value=1,
+                "Topic", format="%.0f%%", min_value=0, max_value=100,
             ),
             "role_fit": st.column_config.ProgressColumn(
-                "Role Fit", format="%.0f%%", min_value=0, max_value=1,
+                "Role Fit", format="%.0f%%", min_value=0, max_value=100,
             ),
             "geographic_proximity": st.column_config.ProgressColumn(
-                "Geo", format="%.0f%%", min_value=0, max_value=1,
+                "Geo", format="%.0f%%", min_value=0, max_value=100,
             ),
             "calendar_fit": st.column_config.ProgressColumn(
-                "Calendar", format="%.0f%%", min_value=0, max_value=1,
+                "Calendar", format="%.0f%%", min_value=0, max_value=100,
             ),
             "student_interest": st.column_config.ProgressColumn(
-                "Interest", format="%.0f%%", min_value=0, max_value=1,
+                "Interest", format="%.0f%%", min_value=0, max_value=100,
             ),
         },
     )
@@ -1237,12 +1241,15 @@ with tab7:
 
         # Detail table
         with st.expander("📋 Coverage Details"):
+            cov_display = cov_df[["opportunity", "best_score", "avg_score", "strong_matches", "coverage_status"]].copy()
+            cov_display["best_score"] = (cov_display["best_score"] * 100).round(0)
+            cov_display["avg_score"] = (cov_display["avg_score"] * 100).round(0)
             st.dataframe(
-                cov_df[["opportunity", "best_score", "avg_score", "strong_matches", "coverage_status"]],
+                cov_display,
                 use_container_width=True, hide_index=True,
                 column_config={
-                    "best_score": st.column_config.ProgressColumn("Best Score", format="%.0f%%", min_value=0, max_value=1),
-                    "avg_score": st.column_config.ProgressColumn("Avg Score", format="%.0f%%", min_value=0, max_value=1),
+                    "best_score": st.column_config.ProgressColumn("Best Score", format="%.0f%%", min_value=0, max_value=100),
+                    "avg_score": st.column_config.ProgressColumn("Avg Score", format="%.0f%%", min_value=0, max_value=100),
                 },
             )
 
@@ -1270,14 +1277,17 @@ with tab7:
         st.plotly_chart(fig, use_container_width=True)
 
         # Full table
+        vol_display = vol_scores[["volunteer", "avg_match_score", "top_match_score",
+                                    "strong_matches", "pipeline_entries", "engagement_score"]].copy()
+        for c in ["avg_match_score", "top_match_score", "engagement_score"]:
+            vol_display[c] = (vol_display[c] * 100).round(0)
         st.dataframe(
-            vol_scores[["volunteer", "avg_match_score", "top_match_score",
-                        "strong_matches", "pipeline_entries", "engagement_score"]],
+            vol_display,
             use_container_width=True, hide_index=True,
             column_config={
-                "avg_match_score": st.column_config.ProgressColumn("Avg Match", format="%.0f%%", min_value=0, max_value=1),
-                "top_match_score": st.column_config.ProgressColumn("Top Match", format="%.0f%%", min_value=0, max_value=1),
-                "engagement_score": st.column_config.ProgressColumn("Engagement", format="%.0f%%", min_value=0, max_value=1),
+                "avg_match_score": st.column_config.ProgressColumn("Avg Match", format="%.0f%%", min_value=0, max_value=100),
+                "top_match_score": st.column_config.ProgressColumn("Top Match", format="%.0f%%", min_value=0, max_value=100),
+                "engagement_score": st.column_config.ProgressColumn("Engagement", format="%.0f%%", min_value=0, max_value=100),
             },
         )
 
