@@ -9,37 +9,38 @@ from datetime import datetime, timedelta
 import random
 
 PIPELINE_STAGES = [
-    "Identified",       # Opportunity discovered
-    "Outreach Sent",    # Email/contact initiated
-    "Engaged",          # Responded positively
-    "Event Scheduled",  # Committed to an event
-    "Event Completed",  # Participated in event
-    "Follow-Up",        # Post-event follow-up
-    "Membership Lead",  # Expressed interest in IA membership
-    "Member",           # Converted to IA member
+    "Match Found",          # Algorithm identified a strong volunteer-opportunity pair
+    "Outreach Sent",        # IA contacted the university coordinator
+    "University Engaged",   # University coordinator responded positively
+    "Event Confirmed",      # Volunteer is scheduled for the event
+    "Event Completed",      # Volunteer participated successfully
+    "Post-Event Follow-Up", # IA followed up with the university contact
+    "Membership Interest",  # University contact or their network expressed interest in IA
+    "New IA Member",        # Someone from the university network joined IA
 ]
 
 STAGE_COLORS = {
-    "Identified": "#6c757d",
+    "Match Found": "#6c757d",
     "Outreach Sent": "#17a2b8",
-    "Engaged": "#007bff",
-    "Event Scheduled": "#ffc107",
+    "University Engaged": "#007bff",
+    "Event Confirmed": "#ffc107",
     "Event Completed": "#28a745",
-    "Follow-Up": "#fd7e14",
-    "Membership Lead": "#6610f2",
-    "Member": "#e83e8c",
+    "Post-Event Follow-Up": "#fd7e14",
+    "Membership Interest": "#6610f2",
+    "New IA Member": "#e83e8c",
 }
 
-# Realistic stage-to-stage conversion rates for VOLUNTEER engagement CRM
-# End-to-end target: ~3.7% (120 → 4-5 members), KPI target is 5%
+# Stage-to-stage conversion rates for IA West university engagement pipeline
+# The membership target is university contacts/networks, NOT the IA volunteers
+# End-to-end target: ~3.7% (120 → 4-5 new members), KPI target is 5%
 STAGE_CONVERSION_RATES = {
-    "Identified → Outreach Sent": 0.90,      # Internal org, nearly all get contacted
-    "Outreach Sent → Engaged": 0.55,         # Warm intros from IA board, higher than cold outreach
-    "Engaged → Event Scheduled": 0.70,       # Volunteers who respond are usually committed
-    "Event Scheduled → Event Completed": 0.85, # Professional volunteers show up
-    "Event Completed → Follow-Up": 0.95,     # Automated follow-up
-    "Follow-Up → Membership Lead": 0.30,     # Not everyone wants membership
-    "Membership Lead → Member": 0.45,        # Warm leads convert well
+    "Match Found → Outreach Sent": 0.90,             # Nearly all matches get outreach
+    "Outreach Sent → University Engaged": 0.55,      # Warm intros via IA board
+    "University Engaged → Event Confirmed": 0.70,    # Engaged coordinators usually confirm
+    "Event Confirmed → Event Completed": 0.85,       # Professional volunteers show up
+    "Event Completed → Post-Event Follow-Up": 0.95,  # Automated follow-up
+    "Post-Event Follow-Up → Membership Interest": 0.30, # Not every contact is interested
+    "Membership Interest → New IA Member": 0.45,     # Warm leads convert well
 }
 
 
@@ -127,7 +128,7 @@ def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame,
         entry_date = base_date + timedelta(days=days_offset)
 
         # Walk through stages with realistic conversion
-        current_stage = "Identified"
+        current_stage = "Match Found"
         current_date = entry_date
 
         entry_id += 1
@@ -172,14 +173,14 @@ def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame,
 
 def _generate_note(stage: str, volunteer: str, opp: str) -> str:
     notes_map = {
-        "Identified": f"Identified {opp} as potential match for {volunteer}",
-        "Outreach Sent": f"Sent personalized outreach email to {opp} coordinator",
-        "Engaged": f"Coordinator responded — interested in having {volunteer} participate",
-        "Event Scheduled": f"Confirmed {volunteer} for upcoming {opp} event",
+        "Match Found": f"Algorithm matched {volunteer} to {opp} based on expertise and fit",
+        "Outreach Sent": f"IA contacted {opp} coordinator about placing {volunteer}",
+        "University Engaged": f"{opp} coordinator responded — interested in having {volunteer}",
+        "Event Confirmed": f"{volunteer} confirmed to participate in {opp}",
         "Event Completed": f"{volunteer} successfully participated in {opp}",
-        "Follow-Up": f"Post-event follow-up sent; {volunteer} interested in continued engagement",
-        "Membership Lead": f"Contact from {opp} expressed interest in IA membership",
-        "Member": f"New IA member converted from {opp} engagement",
+        "Post-Event Follow-Up": f"Follow-up sent to {opp} coordinator; exploring continued partnership",
+        "Membership Interest": f"Contact from {opp} expressed interest in joining IA",
+        "New IA Member": f"New IA member acquired through {opp} engagement via {volunteer}",
     }
     return notes_map.get(stage, "")
 
@@ -190,8 +191,8 @@ def get_pipeline_summary(pipeline: pd.DataFrame) -> dict:
     ordered = {stage: stage_counts.get(stage, 0) for stage in PIPELINE_STAGES}
 
     total = len(pipeline)
-    converted = stage_counts.get("Member", 0)
-    in_progress = total - stage_counts.get("Identified", 0) - converted
+    converted = stage_counts.get("New IA Member", 0)
+    in_progress = total - stage_counts.get("Match Found", 0) - converted
 
     return {
         "total_entries": total,
@@ -259,7 +260,7 @@ def get_metrics_by_event_type(pipeline: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     metrics = []
     for etype, group in pipeline.groupby("event_type"):
-        converted = len(group[group["stage"] == "Member"])
+        converted = len(group[group["stage"] == "New IA Member"])
         metrics.append({
             "event_type": etype,
             "total_entries": len(group),
@@ -278,7 +279,7 @@ def get_metrics_by_region(pipeline: pd.DataFrame) -> pd.DataFrame:
     for region, group in pipeline.groupby("region"):
         if not region:
             continue
-        converted = len(group[group["stage"] == "Member"])
+        converted = len(group[group["stage"] == "New IA Member"])
         metrics.append({
             "region": region,
             "total_entries": len(group),

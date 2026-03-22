@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS pipeline_entries (
     display_id TEXT NOT NULL UNIQUE,
     volunteer_name TEXT NOT NULL,
     opportunity_name TEXT NOT NULL,
-    stage TEXT NOT NULL DEFAULT 'Identified',
+    stage TEXT NOT NULL DEFAULT 'Match Found',
     stage_index INTEGER NOT NULL DEFAULT 0,
     entry_date DATE DEFAULT CURRENT_DATE,
     last_updated DATE DEFAULT CURRENT_DATE,

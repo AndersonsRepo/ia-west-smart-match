@@ -813,9 +813,10 @@ with tab5:
                 border: 1px solid rgba(255,255,255,0.08);">
         <h3 style="color: #ffffff; margin: 0 0 0.5rem 0;">📈 Membership Conversion Pipeline</h3>
         <p style="color: #8899aa; margin: 0; font-size: 0.95rem;">
-            <strong>Goal:</strong> Turn university engagement opportunities into IA West members.<br>
-            Every match starts at <em>Identified</em> and moves through 8 stages toward <em>Member</em>.
-            This pipeline tracks where each volunteer-opportunity pair stands and identifies bottlenecks in conversion.
+            <strong>Goal:</strong> IA volunteers speak at university events → university contacts see the value →
+            they join IA as new members.<br>
+            Each volunteer-opportunity pair starts at <em>Match Found</em> and progresses through 8 stages.
+            The membership target is <strong>university contacts and their networks</strong>, not the volunteers themselves.
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -827,9 +828,9 @@ with tab5:
 
     # ── Visual stage flow with counts ──
     stage_icons = {
-        "Identified": "🔍", "Outreach Sent": "📤", "Engaged": "💬",
-        "Event Scheduled": "📅", "Event Completed": "✅", "Follow-Up": "📞",
-        "Membership Lead": "🌟", "Member": "🏆",
+        "Match Found": "🔍", "Outreach Sent": "📤", "University Engaged": "🤝",
+        "Event Confirmed": "📅", "Event Completed": "✅", "Post-Event Follow-Up": "📞",
+        "Membership Interest": "🌟", "New IA Member": "🏆",
     }
     stage_html = ""
     for i, stage in enumerate(PIPELINE_STAGES):
@@ -848,9 +849,9 @@ with tab5:
     )
 
     # ── KPI row ──
-    members = summary["by_stage"].get("Member", 0)
-    leads = summary["by_stage"].get("Membership Lead", 0)
-    active_in_funnel = summary["total_entries"] - summary["by_stage"].get("Identified", 0) - members
+    members = summary["by_stage"].get("New IA Member", 0)
+    leads = summary["by_stage"].get("Membership Interest", 0)
+    active_in_funnel = summary["total_entries"] - summary["by_stage"].get("Match Found", 0) - members
     drop_offs = summary["total_entries"] - sum(
         1 for entry in pipeline.to_dict("records") if entry.get("stage_index", 0) >= 1
     )

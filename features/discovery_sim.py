@@ -111,7 +111,7 @@ def render_discovery_add_to_pipeline(discoveries_df):
                     "university": row["university"],
                     "region": row["region"],
                     "opportunity_type": row.get("opportunity_type", "event"),
-                    "stage": "Identified",
+                    "stage": "Match Found",
                     "entry_date": datetime.now().strftime("%Y-%m-%d"),
                     "last_updated": datetime.now().strftime("%Y-%m-%d"),
                     "notes": f"Discovered via scan — {row.get('description', '')}",

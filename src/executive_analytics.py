@@ -27,7 +27,7 @@ def compute_roi_projection(pipeline: pd.DataFrame, n_years: int = 3) -> dict:
     total value generated.
     """
     total_entries = len(pipeline)
-    members = len(pipeline[pipeline["stage"] == "Member"])
+    members = len(pipeline[pipeline["stage"] == "New IA Member"])
     conversion_rate = members / total_entries if total_entries > 0 else 0.037
 
     # Time savings per match cycle

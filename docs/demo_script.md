@@ -98,7 +98,7 @@
 **Navigate to:** Pipeline tab
 
 ### Funnel Chart (15 seconds)
-- Show the conversion funnel: Identified → Outreach → Engaged → Scheduled → Completed → Follow-Up → Lead → Member
+- Show the conversion funnel: Match Found → Outreach Sent → University Engaged → Event Confirmed → Event Completed → Post-Event Follow-Up → Membership Interest → New IA Member
 - Point out the conversion rate KPI and the realistic 2-3% end-to-end conversion
 
 ### Conversion Rates (15 seconds)

@@ -110,7 +110,7 @@ def render_add_to_pipeline_form(
             stage = st.selectbox(
                 "Starting Stage",
                 options=PIPELINE_STAGES,
-                index=0,  # default "Identified"
+                index=0,  # default "Match Found"
                 key="pipe_form_stage",
             )
         with col4:
@@ -254,7 +254,7 @@ def render_pipeline_controls(pipeline_df: pd.DataFrame) -> None:
 
 
 def add_to_pipeline_from_match(speaker: str, opportunity: str) -> bool:
-    """Programmatically add an entry at the *Identified* stage.
+    """Programmatically add an entry at the *Match Found* stage.
 
     Returns ``True`` on success, ``False`` if a duplicate already exists.
     """
@@ -272,7 +272,7 @@ def add_to_pipeline_from_match(speaker: str, opportunity: str) -> bool:
         "id": _next_pipeline_id(records),
         "volunteer": speaker,
         "opportunity": opportunity,
-        "stage": "Identified",
+        "stage": "Match Found",
         "stage_index": 0,
         "entry_date": datetime.now().strftime("%Y-%m-%d"),
         "last_updated": datetime.now().strftime("%Y-%m-%d"),
