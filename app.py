@@ -36,6 +36,18 @@ from features.discovery_sim import (
     init_discovery_state, render_discovery_scan_button,
     render_discovery_add_to_pipeline,
 )
+import plotly.io as pio
+
+# ── Brand Plotly Template ──
+_brand_template = go.layout.Template()
+_brand_template.layout.colorway = [
+    "#2c5364", "#007bff", "#28a745", "#7ec8e3", "#ffc107", "#9b59b6", "#e74c3c", "#1abc9c",
+]
+_brand_template.layout.font = dict(family="Arial, sans-serif", color="#a0b4c8")
+_brand_template.layout.paper_bgcolor = "rgba(0,0,0,0)"
+_brand_template.layout.plot_bgcolor = "rgba(0,0,0,0)"
+pio.templates["ia_west"] = _brand_template
+pio.templates.default = "plotly_dark+ia_west"
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -246,6 +258,7 @@ def compute_all_matches(speakers, cpp_events, cpp_courses, event_calendar):
     course_matches = compute_matches(speakers, cpp_courses, event_calendar, opp_type="course")
     all_matches = pd.concat([event_matches, course_matches], ignore_index=True)
     all_matches = all_matches.sort_values("match_score", ascending=False).reset_index(drop=True)
+    all_matches = all_matches.drop_duplicates(subset=["volunteer", "opportunity"], keep="first")
     return event_matches, course_matches, all_matches
 
 data = load_data()
@@ -300,6 +313,20 @@ with st.sidebar:
     | **Interest** | Enrollment + audience signals |
     | **Experience** | Seniority parsing |
     """)
+
+    st.markdown("---")
+
+    st.markdown("##### Tech Stack")
+    st.markdown("""
+    <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:0.5rem">
+        <span style="background:#FF4B4B;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Streamlit</span>
+        <span style="background:#3776AB;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Python</span>
+        <span style="background:#F7931E;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">scikit-learn</span>
+        <span style="background:#3F4F75;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Plotly</span>
+        <span style="background:#3ECF8E;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Supabase</span>
+        <span style="background:#E34F26;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">BeautifulSoup</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("CPP AI Hackathon 2026")
@@ -367,7 +394,8 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab0, tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    "📋 Overview",
     "👥 Volunteers",
     "🎓 Opportunities",
     "🎯 Smart Matches",
@@ -378,12 +406,119 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 ])
 
 
+
+# ═══════════════════════════════════════════════
+# TAB 0 — OVERVIEW / DASHBOARD
+# ═══════════════════════════════════════════════
+with tab0:
+    st.markdown('<div class="section-header">📋 Dashboard Overview</div>', unsafe_allow_html=True)
+    st.caption("At-a-glance summary of IA West Smart Match performance and key metrics.")
+
+    # Key metrics row
+    pipeline = get_pipeline_df()
+    roi_overview = compute_roi_projection(pipeline)
+    yr3_val = roi_overview["projections"][-1]["cumulative_value"]
+    hours_saved = roi_overview["hours_saved_per_cycle"]
+
+    o_c1, o_c2, o_c3 = st.columns(3)
+    o_c1.metric("Board Member Volunteers", len(speakers))
+    o_c2.metric("University Opportunities", len(cpp_events) + len(cpp_courses))
+    o_c3.metric("Match Pairs Scored", f"{len(all_matches):,}")
+
+    o_c4, o_c5, o_c6 = st.columns(3)
+    o_c4.metric("Best Match Score", f"{all_matches['match_score'].max():.0%}")
+    o_c5.metric("3-Year Projected ROI", f"${yr3_val:,}")
+    o_c6.metric("Hours Saved / Cycle", f"{hours_saved}")
+
+    # Top 5 matches leaderboard
+    st.markdown('<div class="section-header">🏆 Top 5 Matches</div>', unsafe_allow_html=True)
+    top5 = all_matches.head(5)[["volunteer", "opportunity", "match_score"]].copy()
+    top5["match_score"] = (top5["match_score"] * 100).round(0)
+    st.dataframe(
+        top5,
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "volunteer": "Volunteer",
+            "opportunity": "Opportunity",
+            "match_score": st.column_config.ProgressColumn(
+                "Match Score", format="%.0f%%", min_value=0, max_value=100,
+            ),
+        },
+    )
+
+    # Mini conversion funnel
+    st.markdown('<div class="section-header">📈 Membership Pipeline Snapshot</div>', unsafe_allow_html=True)
+    funnel_overview = get_funnel_data(pipeline)
+    fig = go.Figure(go.Funnel(
+        y=funnel_overview["stage"],
+        x=funnel_overview["count"],
+        textinfo="value+percent initial",
+        marker=dict(color=[STAGE_COLORS[s] for s in funnel_overview["stage"]]),
+        connector=dict(line=dict(color="rgba(255,255,255,0.1)", width=1)),
+    ))
+    fig.update_layout(
+        title_text="Membership Conversion Funnel", title_font_size=16, title_x=0.5,
+        height=350, margin=dict(l=10, r=10, t=40, b=10),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#a0b4c8"),
+    )
+    st.plotly_chart(fig, use_container_width=True, key="overview_funnel")
+
+    # Before/After comparison
+    st.markdown('<div class="section-header">⚡ Before vs. After Smart Match</div>', unsafe_allow_html=True)
+    ba_col1, ba_col2 = st.columns(2)
+    with ba_col1:
+        st.markdown("""
+        <div class="match-card" style="border-left: 3px solid #dc3545;">
+            <div class="match-title">❌ Before: Manual Process</div>
+            <div class="match-subtitle" style="margin-top:0.5rem; line-height: 1.8;">
+                • 20+ hours per matching cycle<br>
+                • Matches based on personal connections<br>
+                • Generic copy-paste outreach emails<br>
+                • No pipeline tracking or ROI data<br>
+                • Spreadsheet-based, no scalability
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    with ba_col2:
+        st.markdown("""
+        <div class="match-card" style="border-left: 3px solid #28a745;">
+            <div class="match-title">✅ After: AI-Powered Smart Match</div>
+            <div class="match-subtitle" style="margin-top:0.5rem; line-height: 1.8;">
+                • 900 matches scored in seconds<br>
+                • 6-component algorithm with explainability<br>
+                • Personalized outreach per match<br>
+                • Full 8-stage pipeline with KPIs<br>
+                • Scales to 20+ universities automatically
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Algorithm summary
+    with st.expander("🧠 How the Matching Algorithm Works"):
+        st.markdown("""
+The 6-component scoring algorithm combines **AI-powered topic matching** (TF-IDF cosine similarity with bigrams via scikit-learn) with 5 deterministic factors:
+
+| Component | Weight | Method |
+|-----------|--------|--------|
+| **Topic Relevance** | 30% | TF-IDF cosine similarity (bigrams) |
+| **Role Fit** | 25% | Keyword taxonomy matching |
+| **Geographic Proximity** | 20% | Metro region clustering |
+| **Calendar Fit** | 10% | IA event overlap scoring |
+| **Student Interest** | 10% | Enrollment + audience signals |
+| **Experience Level** | 5% | Seniority heuristic parsing |
+
+Every match includes a full human-readable explanation — no black-box decisions.
+        """)
+
+
 # ═══════════════════════════════════════════════
 # TAB 1 — VOLUNTEER PROFILES
 # ═══════════════════════════════════════════════
 with tab1:
     st.markdown('<div class="section-header">👥 IA West Board Members</div>', unsafe_allow_html=True)
-    st.caption("The supply side — 17 board member volunteers with expertise, roles, and metro regions.")
+    st.caption(f"The supply side — {len(speakers)} board member volunteers with expertise, roles, and metro regions.")
 
     col1, col2 = st.columns(2)
     with col1:
@@ -443,7 +578,8 @@ with tab1:
     fig = px.bar(region_counts, x="Region", y="Count", color="Count",
                  color_continuous_scale=["#1a3a5c", "#007bff", "#7ec8e3"], text="Count")
     fig.update_layout(showlegend=False, height=320,
-                      margin=dict(l=0, r=0, t=10, b=0),
+                      title_text="Volunteer Distribution by Metro Region", title_font_size=16, title_x=0.5,
+                      margin=dict(l=0, r=0, t=40, b=0),
                       coloraxis_showscale=False,
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -482,7 +618,9 @@ with tab2:
         cat_counts.columns = ["Category", "Count"]
         fig = px.pie(cat_counts, names="Category", values="Count",
                      hole=0.5, color_discrete_sequence=["#007bff", "#28a745", "#ffc107", "#9b59b6", "#e74c3c"])
-        fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0),
+        fig.update_layout(height=320,
+                          title_text="Event Categories", title_font_size=16, title_x=0.5,
+                          margin=dict(l=0, r=0, t=40, b=0),
                           paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -516,7 +654,8 @@ with tab2:
                      color_discrete_map={"High": "#28a745", "Medium": "#ffc107", "Low": "#dc3545"},
                      text="Count")
         fig.update_layout(showlegend=False, height=280,
-                          margin=dict(l=0, r=0, t=10, b=0),
+                          title_text="Guest Lecture Fit Distribution", title_font_size=16, title_x=0.5,
+                          margin=dict(l=0, r=0, t=40, b=0),
                           paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                           xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
                           yaxis=dict(gridcolor="rgba(255,255,255,0.05)"))
@@ -545,7 +684,8 @@ with tab2:
             color_discrete_sequence=["#007bff", "#28a745", "#ffc107", "#9b59b6", "#e74c3c", "#1abc9c"],
         )
         fig.update_layout(showlegend=False, yaxis_title="",
-                          height=280, margin=dict(l=0, r=0, t=10, b=0),
+                          title_text="IA West 2026 Regional Event Timeline", title_font_size=16, title_x=0.5,
+                          height=280, margin=dict(l=0, r=0, t=40, b=0),
                           paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig, use_container_width=True)
 
@@ -555,7 +695,7 @@ with tab2:
 # ═══════════════════════════════════════════════
 with tab3:
     st.markdown('<div class="section-header">🎯 Smart Match Recommendations</div>', unsafe_allow_html=True)
-    st.caption("Every volunteer scored against every opportunity using a 5-component weighted algorithm.")
+    st.caption("Every volunteer scored against every opportunity using a 6-component weighted algorithm.")
 
     # Filters
     col1, col2, col3 = st.columns(3)
@@ -566,7 +706,89 @@ with tab3:
     with col3:
         top_n = st.number_input("Show top N", min_value=5, max_value=100, value=20)
 
-    display_matches = all_matches.copy()
+    # ── Interactive Weight Tuner ──
+    DEFAULT_WEIGHTS = {"Topic": 0.30, "Role Fit": 0.25, "Geography": 0.20,
+                       "Calendar": 0.10, "Interest": 0.10, "Experience": 0.05}
+    WEIGHT_COLS = {"Topic": "topic_relevance", "Role Fit": "role_fit",
+                   "Geography": "geographic_proximity", "Calendar": "calendar_fit",
+                   "Interest": "student_interest", "Experience": "historical_bonus"}
+
+    with st.expander("🎛️ Algorithm Weight Tuner — adjust weights and watch matches re-rank in real time", expanded=False):
+        st.caption("Drag the sliders to change how much each factor contributes to the match score. "
+                   "Weights auto-normalize to 100%. The default configuration is the recommended balance.")
+
+        wt_cols = st.columns(6)
+        raw_weights = {}
+        for col, (label, default) in zip(wt_cols, DEFAULT_WEIGHTS.items()):
+            with col:
+                raw_weights[label] = st.slider(label, 0, 100, int(default * 100), 5,
+                                               key=f"wt_{label}", format="%d%%")
+
+        # Normalize to sum=1
+        total_raw = sum(raw_weights.values())
+        if total_raw > 0:
+            norm_weights = {k: v / total_raw for k, v in raw_weights.items()}
+        else:
+            norm_weights = DEFAULT_WEIGHTS
+
+        # Check if weights were changed from defaults
+        weights_changed = any(abs(norm_weights[k] - DEFAULT_WEIGHTS[k]) > 0.01 for k in norm_weights)
+        if weights_changed:
+            formula_parts = " + ".join(f"{norm_weights[k]:.2f}×{k}" for k in norm_weights)
+            st.info(f"**Custom formula:** SCORE = {formula_parts}")
+
+            # Show what changed — side-by-side rank comparison
+            tuned = all_matches.copy()
+            tuned["match_score"] = sum(
+                norm_weights[label] * tuned[col_name]
+                for label, col_name in WEIGHT_COLS.items()
+            ).round(3)
+            tuned = tuned.sort_values("match_score", ascending=False).reset_index(drop=True)
+
+            original_top5 = all_matches.head(5)[["volunteer", "opportunity", "match_score"]].values.tolist()
+            new_top5 = tuned.head(5)[["volunteer", "opportunity", "match_score"]].values.tolist()
+
+            if original_top5 != new_top5:
+                rank_col1, rank_col2 = st.columns(2)
+                with rank_col1:
+                    st.markdown("**Default Top 5:**")
+                    for i, (vol, opp, score) in enumerate(original_top5, 1):
+                        st.caption(f"{i}. {vol} → {opp} ({score:.0%})")
+                with rank_col2:
+                    st.markdown("**Your Weights Top 5:**")
+                    for i, (vol, opp, score) in enumerate(new_top5, 1):
+                        st.caption(f"{i}. {vol} → {opp} ({score:.0%})")
+
+            if st.button("↩️ Reset to defaults", key="wt_reset"):
+                for label in DEFAULT_WEIGHTS:
+                    st.session_state[f"wt_{label}"] = int(DEFAULT_WEIGHTS[label] * 100)
+                st.rerun()
+
+    # Recompute with current weights (works whether expander is open or closed)
+    # Streamlit sliders persist in session_state, so values are available outside the expander
+    current_weights = {}
+    for label, default in DEFAULT_WEIGHTS.items():
+        raw_val = st.session_state.get(f"wt_{label}", int(default * 100))
+        current_weights[label] = raw_val
+    total_raw = sum(current_weights.values())
+    if total_raw > 0:
+        norm_weights = {k: v / total_raw for k, v in current_weights.items()}
+    else:
+        norm_weights = DEFAULT_WEIGHTS
+
+    weights_changed = any(abs(norm_weights[k] - DEFAULT_WEIGHTS[k]) > 0.01 for k in norm_weights)
+    if weights_changed:
+        tuned_matches = all_matches.copy()
+        tuned_matches["match_score"] = sum(
+            norm_weights[label] * tuned_matches[col_name]
+            for label, col_name in WEIGHT_COLS.items()
+        ).round(3)
+        tuned_matches = tuned_matches.sort_values("match_score", ascending=False).reset_index(drop=True)
+    else:
+        tuned_matches = all_matches
+
+    # Apply filters to (possibly tuned) matches
+    display_matches = tuned_matches.copy()
     if match_type != "All":
         display_matches = display_matches[display_matches["opportunity_type"] == match_type]
     display_matches = display_matches[display_matches["match_score"] >= min_score].head(top_n)
@@ -577,7 +799,9 @@ with tab3:
                        color="opportunity_type", barmode="overlay",
                        labels={"match_score": "Match Score", "opportunity_type": "Type"},
                        color_discrete_map={"event": "#007bff", "course": "#28a745"})
-    fig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0),
+    fig.update_layout(height=280,
+                      title_text="Match Score Distribution by Opportunity Type", title_font_size=16, title_x=0.5,
+                      margin=dict(l=0, r=0, t=40, b=0),
                       legend=dict(orientation="h", yanchor="bottom", y=1.02),
                       paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                       xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -640,10 +864,11 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
     # Match detail cards with radar charts
     st.markdown('<div class="section-header">🔍 Match Explanations</div>', unsafe_allow_html=True)
     st.caption("Click any match to see why the algorithm recommended it.")
-    for idx, row in display_matches.head(10).iterrows():
+    for i, (idx, row) in enumerate(display_matches.head(10).iterrows()):
         score_pct = f"{row['match_score']:.0%}"
-        with st.expander(f"**{row['volunteer']}** → {row['opportunity']} — **{score_pct}**"):
-            c1, c2 = st.columns([3, 2])
+        with st.expander(f"**{row['volunteer']}** → {row['opportunity']} — **{score_pct}**",
+                         expanded=(i == 0)):
+            c1, c2 = st.columns([1, 2])
             with c1:
                 explanation = explain_match(row)
                 st.markdown(explanation)
@@ -662,6 +887,7 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
                     marker=dict(size=6, color="#7ec8e3"),
                 ))
                 fig.update_layout(
+                    title_text="Match Component Breakdown", title_font_size=16, title_x=0.5,
                     polar=dict(
                         radialaxis=dict(visible=True, range=[0, 1],
                                         gridcolor="rgba(255,255,255,0.08)",
@@ -671,8 +897,8 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
                         bgcolor="rgba(0,0,0,0)",
                     ),
                     showlegend=False,
-                    height=260,
-                    margin=dict(l=40, r=40, t=20, b=20),
+                    height=400,
+                    margin=dict(l=40, r=40, t=40, b=20),
                     paper_bgcolor="rgba(0,0,0,0)",
                     plot_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#a0b4c8"),
@@ -724,8 +950,9 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
         ygap=2,
     ))
     fig.update_layout(
+        title_text="Volunteer \u00d7 Opportunity Match Heatmap", title_font_size=16, title_x=0.5,
         height=max(400, len(pivot) * 35 + 100),
-        margin=dict(l=0, r=0, t=10, b=120),
+        margin=dict(l=0, r=0, t=40, b=120),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font=dict(color="#a0b4c8"),
@@ -736,6 +963,105 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
 
     # Decision summary
     render_decision_summary(all_matches)
+
+    # ── Volunteer Comparison Tool ──
+    st.markdown('<div class="section-header">⚖️ Compare Volunteers</div>', unsafe_allow_html=True)
+    st.caption("Select an opportunity and two volunteers to compare side-by-side.")
+
+    compare_opp = st.selectbox(
+        "Opportunity",
+        options=sorted(all_matches["opportunity"].unique()),
+        key="compare_opp",
+    )
+
+    compare_cols = st.columns(2)
+    opp_matches = all_matches[all_matches["opportunity"] == compare_opp].sort_values("match_score", ascending=False)
+    available_vols = opp_matches["volunteer"].tolist()
+
+    with compare_cols[0]:
+        vol_a = st.selectbox("Volunteer A", options=available_vols, index=0 if available_vols else None, key="compare_a")
+    with compare_cols[1]:
+        vol_b = st.selectbox("Volunteer B", options=available_vols, index=min(1, len(available_vols) - 1) if len(available_vols) > 1 else 0, key="compare_b")
+
+    if vol_a and vol_b and vol_a != vol_b:
+        row_a = opp_matches[opp_matches["volunteer"] == vol_a].iloc[0]
+        row_b = opp_matches[opp_matches["volunteer"] == vol_b].iloc[0]
+
+        components = ["topic_relevance", "role_fit", "geographic_proximity", "calendar_fit", "student_interest", "historical_bonus"]
+        labels = ["Topic", "Role Fit", "Geography", "Calendar", "Interest", "Experience"]
+
+        # Side-by-side radar
+        fig = go.Figure()
+        fig.add_trace(go.Scatterpolar(
+            r=[row_a[c] for c in components] + [row_a[components[0]]],
+            theta=labels + [labels[0]],
+            fill="toself", fillcolor="rgba(0,123,255,0.15)",
+            line=dict(color="#007bff", width=2),
+            name=vol_a,
+        ))
+        fig.add_trace(go.Scatterpolar(
+            r=[row_b[c] for c in components] + [row_b[components[0]]],
+            theta=labels + [labels[0]],
+            fill="toself", fillcolor="rgba(255,107,107,0.15)",
+            line=dict(color="#ff6b6b", width=2),
+            name=vol_b,
+        ))
+        fig.update_layout(
+            title_text="Head-to-Head Comparison", title_font_size=16, title_x=0.5,
+            polar=dict(
+                radialaxis=dict(visible=True, range=[0, 1], gridcolor="rgba(255,255,255,0.08)"),
+                angularaxis=dict(gridcolor="rgba(255,255,255,0.08)"),
+                bgcolor="rgba(0,0,0,0)",
+            ),
+            height=400, margin=dict(l=60, r=60, t=40, b=30),
+            legend=dict(orientation="h", yanchor="bottom", y=1.05),
+            paper_bgcolor="rgba(0,0,0,0)", font=dict(color="#a0b4c8"),
+        )
+        st.plotly_chart(fig, use_container_width=True, key="compare_radar")
+
+        # Component-by-component comparison table
+        compare_data = []
+        for label, comp in zip(labels, components):
+            a_val = row_a[comp]
+            b_val = row_b[comp]
+            winner = vol_a if a_val > b_val else vol_b if b_val > a_val else "Tie"
+            compare_data.append({
+                "Component": label,
+                vol_a: f"{a_val:.0%}",
+                vol_b: f"{b_val:.0%}",
+                "Edge": winner,
+            })
+        compare_data.append({
+            "Component": "**COMPOSITE**",
+            vol_a: f"{row_a['match_score']:.0%}",
+            vol_b: f"{row_b['match_score']:.0%}",
+            "Edge": vol_a if row_a["match_score"] > row_b["match_score"] else vol_b,
+        })
+        st.dataframe(pd.DataFrame(compare_data), use_container_width=True, hide_index=True)
+    elif vol_a and vol_b and vol_a == vol_b:
+        st.info("Select two different volunteers to compare.")
+
+    # ── CSV Export ──
+    st.markdown("---")
+    export_col1, export_col2 = st.columns(2)
+    with export_col1:
+        csv_matches = display_matches.to_csv(index=False)
+        st.download_button(
+            "📥 Export Top Matches (CSV)",
+            data=csv_matches,
+            file_name="ia_west_smart_match_results.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with export_col2:
+        csv_all = all_matches.to_csv(index=False)
+        st.download_button(
+            "📥 Export All 900 Matches (CSV)",
+            data=csv_all,
+            file_name="ia_west_all_matches.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
 
 
 # ═══════════════════════════════════════════════
@@ -759,6 +1085,7 @@ with tab4:
         outreach_type = st.selectbox(
             "Opportunity type",
             options=["event", "course"],
+            index=0,
             key="outreach_type",
         )
 
@@ -889,7 +1216,9 @@ with tab5:
             marker=dict(color=[STAGE_COLORS[s] for s in funnel["stage"]]),
             connector=dict(line=dict(color="rgba(255,255,255,0.1)", width=1)),
         ))
-        fig.update_layout(height=420, margin=dict(l=10, r=10, t=10, b=10),
+        fig.update_layout(height=420,
+                          title_text="Membership Conversion Funnel", title_font_size=16, title_x=0.5,
+                          margin=dict(l=10, r=10, t=40, b=10),
                           paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                           font=dict(color="#a0b4c8"))
         st.plotly_chart(fig, use_container_width=True)
@@ -940,8 +1269,9 @@ with tab5:
             line=dict(dash="dot", color="#94a3b8"),
         ))
         fig.update_layout(
+            title_text="Stage-to-Stage Drop-off Analysis", title_font_size=16, title_x=0.5,
             yaxis_title="Drop-off Rate", yaxis_tickformat=".0%",
-            height=420, margin=dict(l=0, r=0, t=10, b=0),
+            height=420, margin=dict(l=0, r=0, t=40, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(size=10)),
@@ -971,7 +1301,8 @@ with tab5:
                 customdata=vm[["total_entries"]].values,
             ))
             fig.update_layout(
-                height=400, margin=dict(l=0, r=0, t=10, b=0),
+                title_text="Pipeline Progress by Volunteer", title_font_size=16, title_x=0.5,
+                height=400, margin=dict(l=0, r=0, t=40, b=0),
                 xaxis=dict(title="Avg Pipeline Progress (0-7)", gridcolor="rgba(255,255,255,0.05)"),
                 yaxis=dict(autorange="reversed"),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -993,8 +1324,9 @@ with tab5:
                 marker_color="#007bff",
             ))
             fig.update_layout(
+                title_text="Conversion Rate by Event Type", title_font_size=16, title_x=0.5,
                 yaxis_title="Conversion Rate", yaxis_tickformat=".0%",
-                height=350, margin=dict(l=0, r=0, t=10, b=0),
+                height=350, margin=dict(l=0, r=0, t=40, b=0),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
                 yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1020,8 +1352,9 @@ with tab5:
                 customdata=region_metrics[["converted", "unique_volunteers"]].values,
             ))
             fig.update_layout(
+                title_text="Pipeline Entries by Region", title_font_size=16, title_x=0.5,
                 yaxis_title="Pipeline Entries",
-                height=350, margin=dict(l=0, r=0, t=10, b=0),
+                height=350, margin=dict(l=0, r=0, t=40, b=0),
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
                 yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1039,6 +1372,17 @@ with tab5:
         st.markdown("##### ⚙️ Manage Pipeline")
         st.caption("Edit stages, advance or revert entries.")
         render_pipeline_controls(pipeline)
+
+    # Pipeline export
+    st.markdown("---")
+    csv_pipeline = pipeline.to_csv(index=False)
+    st.download_button(
+        "📥 Export Pipeline Data (CSV)",
+        data=csv_pipeline,
+        file_name="ia_west_pipeline.csv",
+        mime="text/csv",
+        key="pipeline_export",
+    )
 
 
 # ═══════════════════════════════════════════════
@@ -1097,7 +1441,8 @@ with tab6:
                              color_discrete_sequence=["#007bff", "#28a745", "#ffc107", "#9b59b6", "#e74c3c"],
                              text="Opportunities")
                 fig.update_layout(showlegend=False, height=280,
-                                  margin=dict(l=0, r=0, t=10, b=0),
+                                  title_text="Discoveries by Region", title_font_size=16, title_x=0.5,
+                                  margin=dict(l=0, r=0, t=40, b=0),
                                   paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                                   font=dict(color="#a0b4c8"))
                 fig.update_traces(textposition="outside", marker_line_width=0)
@@ -1111,7 +1456,9 @@ with tab6:
                 fig = px.pie(type_df, names="Type", values="Count",
                              hole=0.5,
                              color_discrete_sequence=["#007bff", "#28a745", "#ffc107", "#9b59b6"])
-                fig.update_layout(height=280, margin=dict(l=0, r=0, t=10, b=0),
+                fig.update_layout(height=280,
+                                  title_text="Discoveries by Type", title_font_size=16, title_x=0.5,
+                                  margin=dict(l=0, r=0, t=40, b=0),
                                   paper_bgcolor="rgba(0,0,0,0)",
                                   font=dict(color="#a0b4c8"))
                 st.plotly_chart(fig, use_container_width=True)
@@ -1126,7 +1473,8 @@ with tab6:
             fig = px.bar(uni_df, x="University", y="Count", color="Count",
                          color_continuous_scale=["#1a3a5c", "#007bff", "#7ec8e3"], text="Count")
             fig.update_layout(showlegend=False, height=320,
-                              margin=dict(l=0, r=0, t=10, b=0),
+                              title_text="Discoveries by University", title_font_size=16, title_x=0.5,
+                              margin=dict(l=0, r=0, t=40, b=0),
                               coloraxis_showscale=False,
                               paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                               font=dict(color="#a0b4c8"))
@@ -1283,8 +1631,9 @@ with tab7:
             name="Labor Savings", marker_color="#ffc107",
         ))
         fig.update_layout(
+            title_text="3-Year Revenue Breakdown", title_font_size=16, title_x=0.5,
             barmode="stack", yaxis_title="Value ($)",
-            height=380, margin=dict(l=0, r=0, t=10, b=0),
+            height=380, margin=dict(l=0, r=0, t=40, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1305,8 +1654,9 @@ with tab7:
             fill="tozeroy", fillcolor="rgba(126,200,227,0.1)",
         ))
         fig2.update_layout(
+            title_text="Cumulative Value Growth", title_font_size=16, title_x=0.5,
             yaxis_title="Cumulative Value ($)", xaxis_title="",
-            height=300, margin=dict(l=0, r=0, t=30, b=0),
+            height=300, margin=dict(l=0, r=0, t=40, b=0),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
             yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1366,8 +1716,9 @@ with tab7:
         )
         fig.add_vline(x=0.5, line_dash="dash", line_color="rgba(255,255,255,0.3)")
         fig.update_layout(
+            title_text="Opportunity Coverage Analysis", title_font_size=16, title_x=0.5,
             height=max(400, len(cov_df) * 22),
-            margin=dict(l=0, r=0, t=10, b=0),
+            margin=dict(l=0, r=0, t=40, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
             xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1403,7 +1754,8 @@ with tab7:
             text=vol_scores.head(15)["engagement_score"].apply(lambda x: f"{x:.0%}"),
         )
         fig.update_layout(
-            height=500, margin=dict(l=0, r=0, t=10, b=0),
+            title_text="Volunteer Engagement Leaderboard", title_font_size=16, title_x=0.5,
+            height=500, margin=dict(l=0, r=0, t=40, b=0),
             coloraxis_showscale=False,
             yaxis=dict(autorange="reversed"),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
@@ -1447,7 +1799,8 @@ with tab7:
                     fillcolor="rgba(0,123,255,0.1)",
                 ))
                 fig.update_layout(
-                    height=320, margin=dict(l=0, r=0, t=10, b=0),
+                    title_text="Cumulative Pipeline Growth", title_font_size=16, title_x=0.5,
+                    height=320, margin=dict(l=0, r=0, t=40, b=0),
                     xaxis_title="", yaxis_title="Entries",
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1464,7 +1817,8 @@ with tab7:
                              color="new_entries",
                              color_continuous_scale=["#1a3a5c", "#007bff", "#7ec8e3"])
                 fig.update_layout(
-                    height=320, margin=dict(l=0, r=0, t=10, b=0),
+                    title_text="Weekly New Pipeline Entries", title_font_size=16, title_x=0.5,
+                    height=320, margin=dict(l=0, r=0, t=40, b=0),
                     coloraxis_showscale=False,
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                     xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1481,7 +1835,8 @@ with tab7:
                          text=velocity["avg_days"].apply(lambda x: f"{x:.0f}d"),
                          labels={"avg_days": "Avg Days", "stage": ""})
             fig.update_layout(
-                height=320, margin=dict(l=0, r=0, t=10, b=0),
+                title_text="Average Days in Pipeline by Stage", title_font_size=16, title_x=0.5,
+                height=320, margin=dict(l=0, r=0, t=40, b=0),
                 coloraxis_showscale=False,
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                 xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
@@ -1493,14 +1848,75 @@ with tab7:
 
 
 # ─────────────────────────────────────────────
-# FOOTER
+# SYSTEM ARCHITECTURE + FOOTER
 # ─────────────────────────────────────────────
 st.markdown("---")
+
+with st.expander("🏗️ System Architecture", expanded=False):
+    st.markdown("""
+<div style="padding:1rem 0">
+
+<div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:1.5rem">
+    <div style="background:linear-gradient(135deg,#1a3a5c,#2563eb);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
+        <div style="font-size:1.4rem">👥</div>
+        <div style="color:#fff;font-weight:600;font-size:0.85rem">Supply Side</div>
+        <div style="color:#8899aa;font-size:0.72rem">19 Board Members<br>Expertise Tags</div>
+    </div>
+    <div style="display:flex;align-items:center;color:#4a5568;font-size:1.2rem">→</div>
+    <div style="background:linear-gradient(135deg,#1a3a5c,#059669);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
+        <div style="font-size:1.4rem">🎓</div>
+        <div style="color:#fff;font-weight:600;font-size:0.85rem">Demand Side</div>
+        <div style="color:#8899aa;font-size:0.72rem">50 Opportunities<br>Events + Courses</div>
+    </div>
+    <div style="display:flex;align-items:center;color:#4a5568;font-size:1.2rem">→</div>
+    <div style="background:linear-gradient(135deg,#1a3a5c,#d97706);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
+        <div style="font-size:1.4rem">🎯</div>
+        <div style="color:#fff;font-weight:600;font-size:0.85rem">Match Engine</div>
+        <div style="color:#8899aa;font-size:0.72rem">TF-IDF + 6 Factors<br>900 Scored Pairs</div>
+    </div>
+    <div style="display:flex;align-items:center;color:#4a5568;font-size:1.2rem">→</div>
+    <div style="background:linear-gradient(135deg,#1a3a5c,#9333ea);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
+        <div style="font-size:1.4rem">📈</div>
+        <div style="color:#fff;font-weight:600;font-size:0.85rem">Pipeline</div>
+        <div style="color:#8899aa;font-size:0.72rem">8-Stage Funnel<br>→ New IA Members</div>
+    </div>
+</div>
+
+<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap">
+    <div style="background:rgba(26,31,46,0.7);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.7rem 1rem;text-align:center">
+        <div style="color:#7ec8e3;font-weight:600;font-size:0.8rem">Matching</div>
+        <div style="color:#8899aa;font-size:0.7rem">scikit-learn TF-IDF<br>Cosine Similarity</div>
+    </div>
+    <div style="background:rgba(26,31,46,0.7);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.7rem 1rem;text-align:center">
+        <div style="color:#7ec8e3;font-weight:600;font-size:0.8rem">Visualization</div>
+        <div style="color:#8899aa;font-size:0.7rem">Plotly + Streamlit<br>Radar · Heatmap · Funnel</div>
+    </div>
+    <div style="background:rgba(26,31,46,0.7);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.7rem 1rem;text-align:center">
+        <div style="color:#7ec8e3;font-weight:600;font-size:0.8rem">Persistence</div>
+        <div style="color:#8899aa;font-size:0.7rem">Supabase (Postgres)<br>CSV Fallback</div>
+    </div>
+    <div style="background:rgba(26,31,46,0.7);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:0.7rem 1rem;text-align:center">
+        <div style="color:#7ec8e3;font-weight:600;font-size:0.8rem">Discovery</div>
+        <div style="color:#8899aa;font-size:0.7rem">BeautifulSoup<br>University Scrapers</div>
+    </div>
+</div>
+
+</div>
+    """, unsafe_allow_html=True)
+
+    st.markdown("""
+**Key Design Decisions:**
+- **Deterministic matching** — no LLM calls in the scoring pipeline; fully reproducible results
+- **Explainable by default** — every score includes a human-readable breakdown
+- **Configurable weights** — the weight tuner lets stakeholders adjust priorities without code changes
+- **Dual data mode** — works offline with CSV data, scales with Supabase in production
+    """)
+
 st.markdown("""
 <div style="text-align:center;padding:1rem 0">
     <span style="color:#4a5568;font-size:0.85em">
-        IA West Smart Match CRM · CPP AI Hackathon 2026 · 
-        Community Growth & Membership · Built with Streamlit + scikit-learn + TF-IDF
+        IA West Smart Match CRM · CPP AI Hackathon 2026 ·
+        Community Growth & Membership
     </span>
 </div>
 """, unsafe_allow_html=True)
