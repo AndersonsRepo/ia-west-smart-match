@@ -47,7 +47,7 @@
 **Navigate to:** Smart Matches tab
 
 ### Show the Algorithm (15 seconds)
-- Point to the formula in the sidebar: `SCORE = 0.35 * Topic + 0.25 * Role + 0.20 * Geo + 0.10 * Calendar + 0.10 * Experience`
+- Point to the formula in the sidebar: `SCORE = 0.30 * Topic + 0.25 * Role + 0.20 * Geo + 0.10 * Calendar + 0.10 * Interest + 0.05 * Experience`
 - Mention: "Six weighted factors, computed with scikit-learn TF-IDF and cosine similarity"
 
 ### Score Distribution (15 seconds)

@@ -1,139 +1,154 @@
 # IA West Smart Match CRM
 
-AI-powered volunteer-to-opportunity matching system for the Insights Association West Chapter. Built for the CPP AI Hackathon 2026.
+**AI-powered volunteer-to-opportunity matching for the Insights Association West Chapter.**
 
-## What It Does
+Built for the CPP AI Hackathon 2026 — IA West Smart Match Challenge ($2K prize).
 
-Smart Match solves the volunteer coordination problem for professional associations engaging with universities. Instead of relying on personal connections and spreadsheets, the system:
+> *18 board members. 50 opportunities. 900 scored matches. Zero spreadsheets.*
 
-1. **Ingests** speaker profiles and university opportunity data
-2. **Recommends** optimal volunteer-to-opportunity matches using a 6-factor weighted scoring algorithm
-3. **Generates** personalized outreach communications
-4. **Tracks** the engagement-to-membership pipeline (Match Found → New IA Member)
+---
+
+## The Problem
+
+IA West has 18+ board member volunteers and hundreds of university engagement opportunities across the West Coast. Today, matching is manual — someone reads a spreadsheet, guesses who might fit, and sends a generic email. Opportunities are missed, volunteers are underutilized, and membership growth stalls.
+
+## The Solution
+
+Smart Match is an AI-powered CRM that:
+
+1. **Scores** every volunteer against every opportunity using a 6-factor weighted algorithm (TF-IDF + cosine similarity)
+2. **Explains** every recommendation with human-readable breakdowns and radar charts
+3. **Generates** personalized outreach emails with contact lookup and one-click send
+4. **Tracks** the full journey from match → outreach → event → membership conversion
 5. **Discovers** new opportunities via live web scraping of university event pages
-6. **Analyzes** ROI projections, coverage gaps, and volunteer engagement at the executive level
+6. **Projects** ROI with 3-year membership revenue and labor savings forecasts
+7. **Lets you tune** the algorithm in real time with an interactive weight slider
 
 ## Matching Algorithm
 
-The AI matching engine uses **TF-IDF cosine similarity** with bigram features (scikit-learn) to score topic relevance, combined with 5 additional deterministic factors:
-
 ```
 MATCH_SCORE = 0.30 × Topic Relevance       (TF-IDF cosine similarity with bigrams)
-            + 0.25 × Role Fit              (expertise-to-role keyword alignment)
+            + 0.25 × Role Fit              (expertise-to-role keyword taxonomy)
             + 0.20 × Geographic Proximity   (metro region clustering + adjacency)
             + 0.10 × Calendar Fit           (IA regional event schedule overlap)
-            + 0.05 × Experience Bonus       (seniority heuristic from expertise tags)
             + 0.10 × Student Interest       (enrollment capacity / audience signal)
+            + 0.05 × Experience Bonus       (seniority heuristic from title parsing)
 ```
 
-Every match includes a full human-readable explanation with score breakdown and radar chart visualization — no black-box decisions.
+**Key properties:**
+- Fully deterministic — no LLM in the scoring loop; reproducible results
+- Explainable — every score includes a component breakdown
+- Configurable — interactive weight tuner lets stakeholders adjust priorities in real time
 
-## Setup
-
-### Prerequisites
-- Python 3.9+
-- pip
-
-### Install & Run
+## Quick Start
 
 ```bash
-# Clone the repo
 git clone https://github.com/AndersonsRepo/ia-west-smart-match.git
 cd ia-west-smart-match
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the dashboard
 streamlit run app.py
 ```
 
-The app will open at `http://localhost:8501`.
+Opens at `http://localhost:8501`. Works immediately in **demo mode** with bundled CSV data — no API keys or database setup required.
 
 ### Optional: Supabase Persistence
 
-The app works fully in **demo mode** with CSV data. To enable persistent CRM state (volunteer registration, match decisions, pipeline tracking):
+For persistent CRM state (volunteer registration, match decisions, pipeline tracking):
 
-1. Create a Supabase project and run `scripts/migration.sql`
-2. Add credentials to `.streamlit/secrets.toml`:
+1. Create a Supabase project
+2. Run `supabase/migrations/20260322000000_initial_schema.sql` and `supabase/migrations/20260322010000_outreach_enhancements.sql`
+3. Add credentials to `.streamlit/secrets.toml`:
    ```toml
    SUPABASE_URL = "https://your-project.supabase.co"
    SUPABASE_KEY = "your-anon-key"
    ```
 
+## Dashboard Tabs
+
+| Tab | What It Does |
+|-----|-------------|
+| **Volunteers** | Browse 18 IA West board members with expertise tag pills, region filters, and top-3 match previews |
+| **Opportunities** | Explore 15 CPP events, 35 course sections, and the full IA 2026 regional calendar with timeline chart |
+| **Smart Matches** | Ranked recommendations with score distribution, radar charts, annotated heatmap, approve/reject workflow, volunteer comparison tool, weight tuner, and CSV export |
+| **Outreach** | Command center with contact finder, personalized email generation, mailto send, response monitoring, and outreach funnel KPIs |
+| **Pipeline** | 8-stage membership funnel (Match Found → New IA Member) with bottleneck analysis, per-volunteer/region/event-type breakdowns, and stage management |
+| **Discovery** | Live web scraping of university event pages, scraping templates for 6 universities, and a phased expansion roadmap |
+| **Executive** | 3-year ROI projections, opportunity coverage analysis, volunteer engagement leaderboard, pipeline trends, and deterministic strategic insights |
+
+**Bonus:** Volunteer Self-Service Portal (`/Volunteer_Portal`) for self-registration, profile updates, and personal match viewing.
+
+## Key Features for Judges
+
+| Feature | Why It Matters |
+|---------|---------------|
+| **Weight Tuner** | Drag 6 sliders to re-rank all 900 matches in real time — proves the algorithm is transparent and configurable |
+| **Volunteer Comparison** | Side-by-side radar overlay for any two volunteers on any opportunity — makes the recommendation actionable |
+| **Outreach Command Center** | Contact lookup → email generation → mailto send → response tracking — complete outreach workflow |
+| **Bottleneck Analysis** | Shows exactly WHERE prospects drop off in the pipeline — color-coded by severity vs. benchmarks |
+| **ROI Projections** | 3-year stacked bar chart: membership revenue + engagement value + labor savings, with transparent assumptions |
+| **Architecture Diagram** | Expandable system flow showing Supply → Demand → Match Engine → Pipeline with tech detail cards |
+
 ## Project Structure
 
 ```
 ia-west-smart-match/
-├── app.py                        # Streamlit dashboard (7 tabs)
-├── pages/
-│   └── 1_Volunteer_Portal.py     # Self-service volunteer registration
+├── app.py                          # Main dashboard (7 tabs, ~1900 lines)
+├── pages/1_Volunteer_Portal.py     # Self-service volunteer registration
 ├── src/
-│   ├── data_loader.py            # CSV loading and normalization
-│   ├── matching_engine.py        # TF-IDF + 6-factor composite scoring
-│   ├── outreach_generator.py     # Personalized email generation
-│   ├── discovery.py              # University opportunity discovery simulation
-│   ├── university_scraper.py     # Live web scraping engine (requests + BeautifulSoup)
-│   ├── pipeline_tracker.py       # 8-stage membership pipeline tracking
-│   ├── executive_analytics.py    # ROI projections, coverage analysis, engagement scores
-│   └── db.py                     # Supabase data access layer (CSV fallback)
+│   ├── matching_engine.py          # TF-IDF + 6-factor composite scoring
+│   ├── outreach_generator.py       # Email templates + mailto URL generation
+│   ├── pipeline_tracker.py         # 8-stage funnel with conversion benchmarks
+│   ├── executive_analytics.py      # ROI, coverage, engagement, insights
+│   ├── university_scraper.py       # Live web scraping engine
+│   ├── discovery.py                # Opportunity discovery simulation
+│   ├── data_loader.py              # CSV loading and normalization
+│   └── db.py                       # Supabase DAL with CSV fallback
 ├── features/
-│   ├── match_approval.py         # Approve/shortlist/reject workflow
-│   ├── interactive_pipeline.py   # Pipeline stage management UI
-│   ├── outreach_tracking.py      # Outreach send/response tracking
-│   └── discovery_sim.py          # Live scraping UI + discovery scan
-├── data/
-│   ├── speaker_profiles.csv      # 18 IA West board members
-│   ├── cpp_events.csv            # 15 CPP events and programs
-│   ├── event_calendar.csv        # 9 IA West 2026 regional events
-│   └── cpp_courses.csv           # 35 CPP marketing course sections
-├── docs/
-│   ├── growth_strategy.md        # Multi-phase expansion plan
-│   ├── measurement_plan.md       # KPIs and tracking framework
-│   ├── responsible_ai.md         # Ethical AI guidelines
-│   └── demo_script.md            # 5-minute demo walkthrough
-├── scripts/
-│   ├── migration.sql             # Supabase schema (7 tables)
-│   └── seed_supabase.py          # CSV → Supabase import
-├── requirements.txt
-└── README.md
+│   ├── match_approval.py           # Approve/shortlist/reject workflow
+│   ├── interactive_pipeline.py     # Pipeline stage management UI
+│   ├── outreach_tracking.py        # Contact finder + response monitor
+│   └── discovery_sim.py            # Live scraping UI + scan button
+├── data/                           # 4 CSV datasets (speakers, events, courses, calendar)
+├── docs/                           # Growth strategy, measurement plan, responsible AI, demo script
+├── supabase/migrations/            # PostgreSQL schema (2 migration files)
+├── tests/test_matching.py          # 8 matching engine tests
+└── requirements.txt
 ```
-
-## Dashboard Tabs
-
-| Tab | Description |
-|-----|-------------|
-| **Speaker Profiles** | Browse IA West board members with expertise tags, regions, and top matches |
-| **Opportunities** | Explore CPP events, course sections, and the IA regional event calendar |
-| **Smart Matches** | Ranked recommendations with score breakdowns, radar charts, annotated heatmap, and approve/shortlist/reject workflow |
-| **Outreach** | Generate personalized email drafts with outreach tracking |
-| **Pipeline** | 8-stage membership funnel (Match Found → New IA Member) with bottleneck analysis and KPIs |
-| **Discovery** | Live web scraping of university event pages + expansion roadmap |
-| **Executive Analytics** | ROI projections, coverage analysis, volunteer engagement scores, and strategic insights |
-
-## Data Sources
-
-- **Speaker profiles** — 18 IA West board members with expertise tags, metro regions, and company affiliations
-- **CPP events** — 15 published event listings from Cal Poly Pomona departments and student orgs
-- **Event calendar** — 9 IA West 2026 regional events across the West Coast with lecture window suggestions
-- **Course schedule** — 35 CPP marketing department course sections with guest lecture fit ratings
 
 ## Tech Stack
 
-- **Python** — Core language
-- **Streamlit** — Interactive dashboard + Streamlit Cloud deployment
-- **scikit-learn** — TF-IDF vectorization and cosine similarity
-- **pandas / NumPy** — Data manipulation
-- **Plotly** — Interactive charts, annotated heatmaps, funnels, and radar charts
-- **requests + BeautifulSoup** — Live university event page scraping
-- **Supabase** — Optional PostgreSQL persistence for CRM state
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Streamlit (wide layout, custom CSS, glassmorphism cards) |
+| **Matching** | scikit-learn TF-IDF vectorizer + cosine similarity |
+| **Visualization** | Plotly (radar, heatmap, funnel, histogram, timeline, bar, pie) |
+| **Data** | pandas + NumPy |
+| **Scraping** | requests + BeautifulSoup4 |
+| **Persistence** | Supabase (PostgreSQL) with CSV fallback |
+| **Deployment** | Streamlit Cloud / Codespaces (devcontainer included) |
+
+## Data Sources
+
+- **18 IA West board members** — names, roles, companies, metro regions, expertise tags (from IA West board roster)
+- **15 CPP events** — hackathons, symposiums, career programs, and student org events
+- **35 course sections** — CPP marketing department schedule with guest lecture fit ratings
+- **9 regional events** — IA West 2026 calendar across LA, SF, Seattle, Portland, San Diego
 
 ## Deliverables
 
-- [Growth Strategy](docs/growth_strategy.md) — Multi-phase expansion from CPP to 20+ universities
-- [Measurement Plan](docs/measurement_plan.md) — KPIs, tracking framework, and success criteria
-- [Responsible AI Note](docs/responsible_ai.md) — Ethical guidelines, bias mitigation, transparency commitments
+- [Growth Strategy](docs/growth_strategy.md) — 4-phase expansion from CPP pilot to national platform
+- [Measurement Plan](docs/measurement_plan.md) — KPIs, tracking framework, and Year 1 success criteria
+- [Responsible AI](docs/responsible_ai.md) — Ethical guidelines, bias mitigation, transparency commitments
+- [Demo Script](docs/demo_script.md) — 5-minute walkthrough with talking points and Q&A prep
 
-## Team
+## Running Tests
 
-Built by Anderson Edmond for the CPP AI Hackathon 2026 — IA West Smart Match Challenge.
+```bash
+python tests/test_matching.py
+```
+
+Verifies: all volunteers matched, known-good pairings (Dr. Lin → AI Hackathon), geographic scoring, score bounds, explanation structure, and deduplication.
+
+---
+
+Built by Anderson Edmond · CPP AI Hackathon 2026 · IA West Smart Match Challenge
