@@ -806,155 +806,237 @@ with tab4:
 # TAB 5 — PIPELINE
 # ═══════════════════════════════════════════════
 with tab5:
-    st.markdown('<div class="section-header">📈 Engagement Pipeline</div>', unsafe_allow_html=True)
-    st.caption("Track the journey from opportunity identification to IA membership conversion.")
-
-    # Add to pipeline form
-    with st.expander("➕ Add new pipeline entry", expanded=False):
-        render_add_to_pipeline_form(speakers, cpp_events)
+    # Purpose statement
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #0f2027 0%, #1a3a5c 100%);
+                border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+                border: 1px solid rgba(255,255,255,0.08);">
+        <h3 style="color: #ffffff; margin: 0 0 0.5rem 0;">📈 Membership Conversion Pipeline</h3>
+        <p style="color: #8899aa; margin: 0; font-size: 0.95rem;">
+            <strong>Goal:</strong> Turn university engagement opportunities into IA West members.<br>
+            Every match starts at <em>Identified</em> and moves through 8 stages toward <em>Member</em>.
+            This pipeline tracks where each volunteer-opportunity pair stands and identifies bottlenecks in conversion.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
     pipeline = get_pipeline_df()
     summary = get_pipeline_summary(pipeline)
     funnel = get_funnel_data(pipeline)
+    conversions = summary["stage_conversions"]
 
-    # KPI row
+    # ── Visual stage flow with counts ──
+    stage_icons = {
+        "Identified": "🔍", "Outreach Sent": "📤", "Engaged": "💬",
+        "Event Scheduled": "📅", "Event Completed": "✅", "Follow-Up": "📞",
+        "Membership Lead": "🌟", "Member": "🏆",
+    }
+    stage_html = ""
+    for i, stage in enumerate(PIPELINE_STAGES):
+        count = summary["by_stage"].get(stage, 0)
+        color = STAGE_COLORS[stage]
+        icon = stage_icons.get(stage, "📌")
+        arrow = ' <span style="color:#4a5568;font-size:1.2rem;">→</span> ' if i < len(PIPELINE_STAGES) - 1 else ""
+        stage_html += (
+            f'<span style="display:inline-block;background:{color};color:white;'
+            f'padding:6px 12px;border-radius:20px;font-size:0.82rem;margin:3px 2px;'
+            f'white-space:nowrap;">{icon} {stage} <strong>({count})</strong></span>{arrow}'
+        )
+    st.markdown(
+        f'<div style="text-align:center;padding:0.5rem 0;line-height:2.5;">{stage_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── KPI row ──
+    members = summary["by_stage"].get("Member", 0)
+    leads = summary["by_stage"].get("Membership Lead", 0)
+    active_in_funnel = summary["total_entries"] - summary["by_stage"].get("Identified", 0) - members
+    drop_offs = summary["total_entries"] - sum(
+        1 for entry in pipeline.to_dict("records") if entry.get("stage_index", 0) >= 1
+    )
     st.markdown(f"""
     <div class="kpi-row">
         <div class="kpi-card accent">
             <div class="kpi-value">{summary['total_entries']}</div>
-            <div class="kpi-label">Total Entries</div>
+            <div class="kpi-label">Matches Entered</div>
         </div>
         <div class="kpi-card green">
-            <div class="kpi-value">{summary['active_pipeline']}</div>
-            <div class="kpi-label">Active Pipeline</div>
+            <div class="kpi-value">{active_in_funnel}</div>
+            <div class="kpi-label">In Progress</div>
+        </div>
+        <div class="kpi-card purple">
+            <div class="kpi-value">{leads + members}</div>
+            <div class="kpi-label">Leads + Members</div>
         </div>
         <div class="kpi-card orange">
             <div class="kpi-value">{summary['conversion_rate']:.1%}</div>
-            <div class="kpi-label">Conversion Rate</div>
-        </div>
-        <div class="kpi-card purple">
-            <div class="kpi-value">{summary["unique_volunteers"]}</div>
-            <div class="kpi-label">Volunteers Engaged</div>
+            <div class="kpi-label">End-to-End Conversion</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # Funnel + Conversion side by side
-    col1, col2 = st.columns(2)
+    # ── Main visuals: Funnel + Bottleneck Analysis ──
+    col_funnel, col_bottleneck = st.columns(2)
 
-    with col1:
+    with col_funnel:
         st.markdown('<div class="section-header">Conversion Funnel</div>', unsafe_allow_html=True)
+        st.caption("How many matches survive each stage.")
         fig = go.Figure(go.Funnel(
             y=funnel["stage"],
             x=funnel["count"],
             textinfo="value+percent initial",
             marker=dict(color=[STAGE_COLORS[s] for s in funnel["stage"]]),
+            connector=dict(line=dict(color="rgba(255,255,255,0.1)", width=1)),
         ))
-        fig.update_layout(height=380, margin=dict(l=10, r=10, t=10, b=10),
+        fig.update_layout(height=420, margin=dict(l=10, r=10, t=10, b=10),
                           paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                           font=dict(color="#a0b4c8"))
         st.plotly_chart(fig, use_container_width=True)
 
-    with col2:
-        st.markdown('<div class="section-header">Actual vs Benchmark</div>', unsafe_allow_html=True)
-        conversions = summary["stage_conversions"]
+    with col_bottleneck:
+        st.markdown('<div class="section-header">Where Are We Losing People?</div>', unsafe_allow_html=True)
+        st.caption("Stage-to-stage drop-off rates. Red = biggest bottleneck.")
+
+        # Calculate drop-off at each transition
+        drop_data = []
+        for c in conversions:
+            dropped = c["from_count"] - c["to_count"]
+            drop_rate = 1 - c["rate"] if c["from_count"] > 0 else 0
+            drop_data.append({
+                "transition": f"{c['from']} →\n{c['to']}",
+                "dropped": dropped,
+                "drop_rate": drop_rate,
+                "survived": c["to_count"],
+                "benchmark_drop": 1 - c["benchmark"],
+            })
+        drop_df = pd.DataFrame(drop_data)
+
+        # Color bars by severity — worst drop-off is red
+        max_drop = drop_df["drop_rate"].max() if not drop_df.empty else 1
+        bar_colors = []
+        for rate in drop_df["drop_rate"]:
+            if rate >= max_drop * 0.8:
+                bar_colors.append("#ef4444")  # Red — worst bottleneck
+            elif rate >= 0.3:
+                bar_colors.append("#f59e0b")  # Amber — concerning
+            else:
+                bar_colors.append("#22c55e")  # Green — healthy
         fig = go.Figure()
         fig.add_trace(go.Bar(
-            x=[f"{c['from']} →\n{c['to']}" for c in conversions],
-            y=[c['rate'] for c in conversions],
-            name="Actual",
-            marker_color="#007bff",
+            x=drop_df["transition"],
+            y=drop_df["drop_rate"],
+            text=drop_df.apply(lambda r: f"{r['drop_rate']:.0%} ({r['dropped']} lost)", axis=1),
+            textposition="outside",
+            marker_color=bar_colors,
+            name="Actual Drop-off",
         ))
         fig.add_trace(go.Scatter(
-            x=[f"{c['from']} →\n{c['to']}" for c in conversions],
-            y=[c['benchmark'] for c in conversions],
-            name="Benchmark",
+            x=drop_df["transition"],
+            y=drop_df["benchmark_drop"],
+            name="Expected Drop-off",
             mode="markers+lines",
-            marker=dict(color="#ff6b6b", size=8),
-            line=dict(dash="dash", color="#ff6b6b"),
+            marker=dict(color="#94a3b8", size=7),
+            line=dict(dash="dot", color="#94a3b8"),
         ))
         fig.update_layout(
-            yaxis_title="Rate", yaxis_tickformat=".0%",
-            height=380, margin=dict(l=0, r=0, t=10, b=0),
+            yaxis_title="Drop-off Rate", yaxis_tickformat=".0%",
+            height=420, margin=dict(l=0, r=0, t=10, b=0),
             legend=dict(orientation="h", yanchor="bottom", y=1.02),
             paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            xaxis=dict(gridcolor="rgba(255,255,255,0.05)", tickfont=dict(size=10)),
             yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
             font=dict(color="#a0b4c8"),
         )
         st.plotly_chart(fig, use_container_width=True)
 
-    # Sub-breakdowns
-    pipe_sub1, pipe_sub2, pipe_sub3 = st.tabs(["By Volunteer", "By Event Type", "By Region"])
+    # ── Breakdowns ──
+    st.markdown('<div class="section-header">Pipeline Breakdown</div>', unsafe_allow_html=True)
+    pipe_sub1, pipe_sub2, pipe_sub3 = st.tabs(["👤 By Volunteer", "🎯 By Event Type", "📍 By Region"])
 
     with pipe_sub1:
         volunteer_metrics = get_metrics_by_volunteer(pipeline)
         if not volunteer_metrics.empty:
-            st.dataframe(
-                volunteer_metrics[["volunteer", "total_entries", "furthest_stage",
-                                 "region", "avg_stage_index"]].rename(columns={
-                    "avg_stage_index": "Avg Progress"
-                }),
-                use_container_width=True, hide_index=True,
-                column_config={
-                    "Avg Progress": st.column_config.ProgressColumn("Progress", min_value=0, max_value=7),
-                },
+            # Horizontal bar chart — most engaged volunteers
+            vm = volunteer_metrics.head(12)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                y=vm["volunteer"],
+                x=vm["avg_stage_index"],
+                orientation="h",
+                marker_color=[STAGE_COLORS.get(s, "#6c757d") for s in vm["furthest_stage"]],
+                text=vm["furthest_stage"],
+                textposition="inside",
+                hovertemplate="<b>%{y}</b><br>Entries: %{customdata[0]}<br>Furthest: %{text}<extra></extra>",
+                customdata=vm[["total_entries"]].values,
+            ))
+            fig.update_layout(
+                height=400, margin=dict(l=0, r=0, t=10, b=0),
+                xaxis=dict(title="Avg Pipeline Progress (0-7)", gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(autorange="reversed"),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#a0b4c8"),
             )
-            fig = px.bar(volunteer_metrics.head(10), x="volunteer", y="avg_stage_index",
-                         color="furthest_stage",
-                         labels={"avg_stage_index": "Avg Progress"})
-            fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0),
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#a0b4c8"))
             st.plotly_chart(fig, use_container_width=True, key="pipe_volunteer_chart")
 
     with pipe_sub2:
         event_metrics = get_metrics_by_event_type(pipeline)
         if not event_metrics.empty:
-            st.dataframe(
-                event_metrics.rename(columns={"avg_stage_index": "Avg Progress"}),
-                use_container_width=True, hide_index=True,
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=event_metrics["event_type"],
+                y=event_metrics["conversion_rate"],
+                text=event_metrics.apply(
+                    lambda r: f"{r['conversion_rate']:.0%} ({r['converted']}/{r['total_entries']})", axis=1
+                ),
+                textposition="outside",
+                marker_color="#007bff",
+            ))
+            fig.update_layout(
+                yaxis_title="Conversion Rate", yaxis_tickformat=".0%",
+                height=350, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                font=dict(color="#a0b4c8"),
             )
-            fig = px.bar(event_metrics, x="event_type", y="conversion_rate",
-                         color="event_type",
-                         labels={"conversion_rate": "Conversion Rate"})
-            fig.update_layout(yaxis_tickformat=".0%", showlegend=False,
-                              height=320, margin=dict(l=0, r=0, t=10, b=0),
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#a0b4c8"))
             st.plotly_chart(fig, use_container_width=True, key="pipe_event_chart")
 
     with pipe_sub3:
         region_metrics = get_metrics_by_region(pipeline)
         if not region_metrics.empty:
-            st.dataframe(
-                region_metrics.rename(columns={"avg_stage_index": "Avg Progress"}),
-                use_container_width=True, hide_index=True,
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=region_metrics["region"],
+                y=region_metrics["total_entries"],
+                text=region_metrics.apply(
+                    lambda r: f"{r['conversion_rate']:.0%} conv.", axis=1
+                ),
+                textposition="outside",
+                marker_color=region_metrics["conversion_rate"].apply(
+                    lambda r: "#ef4444" if r < 0.02 else "#f59e0b" if r < 0.05 else "#22c55e"
+                ),
+                hovertemplate="<b>%{x}</b><br>Entries: %{y}<br>Converted: %{customdata[0]}<br>Volunteers: %{customdata[1]}<extra></extra>",
+                customdata=region_metrics[["converted", "unique_volunteers"]].values,
+            ))
+            fig.update_layout(
+                yaxis_title="Pipeline Entries",
+                height=350, margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                font=dict(color="#a0b4c8"),
             )
-            fig = px.bar(region_metrics, x="region", y="total_entries",
-                         color="conversion_rate",
-                         color_continuous_scale=["#1a3a5c", "#28a745", "#7ec8e3"])
-            fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0),
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#a0b4c8"))
             st.plotly_chart(fig, use_container_width=True, key="pipe_region_chart")
 
-    # Stage breakdown
-    st.markdown('<div class="section-header">Pipeline by Stage</div>', unsafe_allow_html=True)
-    stage_df = pd.DataFrame([
-        {"Stage": stage, "Count": summary["by_stage"].get(stage, 0)}
-        for stage in PIPELINE_STAGES
-    ])
-    fig = px.bar(stage_df, x="Stage", y="Count", color="Stage",
-                 color_discrete_map=STAGE_COLORS, text="Count")
-    fig.update_layout(showlegend=False, height=280,
-                      margin=dict(l=0, r=0, t=10, b=0),
-                      paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                      font=dict(color="#a0b4c8"))
-    fig.update_traces(textposition="outside", marker_line_width=0)
-    st.plotly_chart(fig, use_container_width=True)
-
-    with st.expander("📋 Pipeline manager — edit stages, advance, or revert entries"):
+    # ── Pipeline Manager ──
+    st.markdown("---")
+    col_add, col_manage = st.columns([1, 2])
+    with col_add:
+        st.markdown("##### ➕ Add Entry")
+        render_add_to_pipeline_form(speakers, cpp_events)
+    with col_manage:
+        st.markdown("##### ⚙️ Manage Pipeline")
+        st.caption("Edit stages, advance or revert entries.")
         render_pipeline_controls(pipeline)
 
 
