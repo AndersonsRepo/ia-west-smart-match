@@ -73,7 +73,9 @@ This measurement plan defines how we track the effectiveness of Smart Match acro
 
 The matching algorithm weights should be tuned based on measured outcomes:
 
-1. **Baseline** (Current): Topic 0.30, Role 0.25, Geo 0.20, Calendar 0.15, History 0.10
+1. **Baseline** (Current): Topic 0.30, Role 0.25, Geo 0.20, Calendar 0.10, Experience 0.05, Student Interest 0.10
+
+   > **Note:** Student Interest Signal (enrollment trends, Google Trends) is planned for Phase 2 but not yet implemented in the prototype.
 2. **After 25 placements:** Analyze which score components best predict successful placements
 3. **Adjust weights** based on correlation analysis
 4. **A/B test** adjusted weights on next batch of recommendations

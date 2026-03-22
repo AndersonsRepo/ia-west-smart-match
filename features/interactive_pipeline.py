@@ -44,7 +44,8 @@ def _next_pipeline_id(records: list[dict]) -> str:
 
 
 def init_pipeline_state(
-    speakers: pd.DataFrame, cpp_events: pd.DataFrame
+    speakers: pd.DataFrame, cpp_events: pd.DataFrame,
+    all_matches: pd.DataFrame = None,
 ) -> None:
     """Initialise ``st.session_state.pipeline_data`` with mock data.
 
@@ -53,7 +54,7 @@ def init_pipeline_state(
     """
     if "pipeline_data" not in st.session_state:
         st.session_state.pipeline_data = generate_mock_pipeline(
-            speakers, cpp_events
+            speakers, cpp_events, all_matches=all_matches
         ).to_dict("records")
 
 
@@ -72,7 +73,7 @@ def render_add_to_pipeline_form(
         col1, col2 = st.columns(2)
         with col1:
             speaker = st.selectbox(
-                "Speaker",
+                "Volunteer",
                 options=speakers["name"].tolist(),
                 key="pipe_form_speaker",
             )
@@ -100,7 +101,7 @@ def render_add_to_pipeline_form(
         records: list[dict] = st.session_state.pipeline_data
         new_entry = {
             "id": _next_pipeline_id(records),
-            "speaker": speaker,
+            "volunteer": speaker,
             "opportunity": opportunity,
             "stage": stage,
             "stage_index": PIPELINE_STAGES.index(stage),
@@ -133,7 +134,7 @@ def render_pipeline_controls(pipeline_df: pd.DataFrame) -> None:
     st.subheader("Pipeline Manager")
 
     # ── Inline data editor ───────────────────────────────────────────
-    display_cols = ["id", "speaker", "opportunity", "stage", "notes", "last_updated"]
+    display_cols = ["id", "volunteer", "opportunity", "stage", "notes", "last_updated"]
     available_cols = [c for c in display_cols if c in pipeline_df.columns]
     edit_df = pipeline_df[available_cols].copy()
 
@@ -145,7 +146,7 @@ def render_pipeline_controls(pipeline_df: pd.DataFrame) -> None:
         key="pipeline_editor",
         column_config={
             "id": st.column_config.TextColumn("ID", disabled=True, width="small"),
-            "speaker": st.column_config.TextColumn("Speaker", disabled=True),
+            "volunteer": st.column_config.TextColumn("Volunteer", disabled=True),
             "opportunity": st.column_config.TextColumn("Opportunity", disabled=True),
             "stage": st.column_config.SelectboxColumn(
                 "Stage",
@@ -170,7 +171,7 @@ def render_pipeline_controls(pipeline_df: pd.DataFrame) -> None:
     col_sel, col_adv, col_rev = st.columns([3, 1, 1])
     with col_sel:
         entry_options = [
-            f"{r['id']} — {r['speaker']} → {r['opportunity']}"
+            f"{r['id']} — {r['volunteer']} → {r['opportunity']}"
             for r in st.session_state.pipeline_data
         ]
         selected_label = st.selectbox(
@@ -238,12 +239,12 @@ def add_to_pipeline_from_match(speaker: str, opportunity: str) -> bool:
 
     # Duplicate check
     for r in records:
-        if r["speaker"] == speaker and r["opportunity"] == opportunity:
+        if r["volunteer"] == speaker and r["opportunity"] == opportunity:
             return False
 
     new_entry = {
         "id": _next_pipeline_id(records),
-        "speaker": speaker,
+        "volunteer": speaker,
         "opportunity": opportunity,
         "stage": "Identified",
         "stage_index": 0,

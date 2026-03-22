@@ -6,9 +6,9 @@ from pathlib import Path
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 
-def load_speakers() -> pd.DataFrame:
-    """Load speaker profiles with normalized columns."""
-    df = pd.read_csv(DATA_DIR / "speaker_profiles.csv")
+def load_volunteers() -> pd.DataFrame:
+    """Load volunteer profiles with normalized columns."""
+    df = pd.read_csv(DATA_DIR / "speaker_profiles.csv")  # CSV name unchanged
     df.columns = [c.strip() for c in df.columns]
     df = df.rename(columns={
         "Name": "name",
@@ -99,7 +99,7 @@ def load_cpp_courses() -> pd.DataFrame:
 def load_all():
     """Load all datasets and return as dict."""
     return {
-        "speakers": load_speakers(),
+        "speakers": load_volunteers(),
         "cpp_events": load_cpp_events(),
         "event_calendar": load_event_calendar(),
         "cpp_courses": load_cpp_courses(),

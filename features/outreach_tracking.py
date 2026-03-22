@@ -1,4 +1,4 @@
-"""Outreach Tracking — status tracking for speaker outreach campaigns."""
+"""Outreach Tracking — status tracking for volunteer outreach campaigns."""
 
 import streamlit as st
 from datetime import datetime
@@ -7,7 +7,7 @@ from datetime import datetime
 def init_outreach_state():
     """Initialize outreach tracking in session state.
 
-    Keys: "speaker|opportunity" -> {"status": "draft"/"sent"/"responded",
+    Keys: "volunteer|opportunity" -> {"status": "draft"/"sent"/"responded",
     "sent_date": None, "notes": ""}
     """
     if "outreach_status" not in st.session_state:
@@ -16,8 +16,8 @@ def init_outreach_state():
         st.session_state.action_log = []
 
 
-def _outreach_key(speaker: str, opportunity: str) -> str:
-    return f"{speaker}|{opportunity}"
+def _outreach_key(volunteer: str, opportunity: str) -> str:
+    return f"{volunteer}|{opportunity}"
 
 
 def _status_badge_html(status: str) -> str:
@@ -35,10 +35,10 @@ def _status_badge_html(status: str) -> str:
     )
 
 
-def auto_create_draft(speaker: str, opportunity: str):
+def auto_create_draft(volunteer: str, opportunity: str):
     """Create a draft outreach entry when a match is approved."""
     init_outreach_state()
-    key = _outreach_key(speaker, opportunity)
+    key = _outreach_key(volunteer, opportunity)
     if key not in st.session_state.outreach_status:
         st.session_state.outreach_status[key] = {
             "status": "draft",
@@ -47,14 +47,14 @@ def auto_create_draft(speaker: str, opportunity: str):
         }
 
 
-def render_outreach_actions(speaker: str, opportunity: str, outreach_type: str):
+def render_outreach_actions(volunteer: str, opportunity: str, outreach_type: str):
     """Render outreach status controls inside an expander.
 
     Displays a status badge, transition buttons, and a notes field.
-    Uses speaker+opportunity+outreach_type to build unique widget keys.
+    Uses volunteer+opportunity+outreach_type to build unique widget keys.
     """
     init_outreach_state()
-    key = _outreach_key(speaker, opportunity)
+    key = _outreach_key(volunteer, opportunity)
 
     # Ensure entry exists
     if key not in st.session_state.outreach_status:
@@ -71,7 +71,7 @@ def render_outreach_actions(speaker: str, opportunity: str, outreach_type: str):
     st.markdown(_status_badge_html(status), unsafe_allow_html=True)
 
     # Build a safe suffix for widget keys
-    safe_key = f"{speaker}_{opportunity}_{outreach_type}".replace(" ", "_")[:80]
+    safe_key = f"{volunteer}_{opportunity}_{outreach_type}".replace(" ", "_")[:80]
 
     # Transition buttons
     col1, col2 = st.columns(2)
@@ -83,11 +83,11 @@ def render_outreach_actions(speaker: str, opportunity: str, outreach_type: str):
                 st.session_state.action_log.append({
                     "timestamp": datetime.now().isoformat(),
                     "action": "outreach_sent",
-                    "speaker": speaker,
+                    "volunteer": volunteer,
                     "opportunity": opportunity,
                     "type": outreach_type,
                 })
-                st.toast(f"Marked outreach to {speaker} as sent!")
+                st.toast(f"Marked outreach to {volunteer} as sent!")
                 st.rerun()
 
     with col2:
@@ -97,11 +97,11 @@ def render_outreach_actions(speaker: str, opportunity: str, outreach_type: str):
                 st.session_state.action_log.append({
                     "timestamp": datetime.now().isoformat(),
                     "action": "outreach_responded",
-                    "speaker": speaker,
+                    "volunteer": volunteer,
                     "opportunity": opportunity,
                     "type": outreach_type,
                 })
-                st.toast(f"Response received from {speaker}!")
+                st.toast(f"Response received from {volunteer}!")
                 st.rerun()
 
     # Sent date display

@@ -30,50 +30,97 @@ STAGE_COLORS = {
     "Member": "#e83e8c",
 }
 
-# Realistic stage-to-stage conversion rates (industry benchmarks)
+# Realistic stage-to-stage conversion rates for VOLUNTEER engagement CRM
+# End-to-end target: ~3.7% (120 → 4-5 members), KPI target is 5%
 STAGE_CONVERSION_RATES = {
-    "Identified → Outreach Sent": 0.85,      # Most identified get outreach
-    "Outreach Sent → Engaged": 0.40,         # 40% response rate for warm intros
-    "Engaged → Event Scheduled": 0.60,       # Interested contacts schedule well
-    "Event Scheduled → Event Completed": 0.80, # Most show up when committed
-    "Event Completed → Follow-Up": 0.90,     # Nearly all get follow-ups
-    "Follow-Up → Membership Lead": 0.25,     # 25% express membership interest
-    "Membership Lead → Member": 0.35,        # 35% of leads convert
+    "Identified → Outreach Sent": 0.90,      # Internal org, nearly all get contacted
+    "Outreach Sent → Engaged": 0.55,         # Warm intros from IA board, higher than cold outreach
+    "Engaged → Event Scheduled": 0.70,       # Volunteers who respond are usually committed
+    "Event Scheduled → Event Completed": 0.85, # Professional volunteers show up
+    "Event Completed → Follow-Up": 0.95,     # Automated follow-up
+    "Follow-Up → Membership Lead": 0.30,     # Not everyone wants membership
+    "Membership Lead → Member": 0.45,        # Warm leads convert well
 }
 
 
-def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame) -> pd.DataFrame:
+def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame,
+                          all_matches: pd.DataFrame = None) -> pd.DataFrame:
     """
     Generate realistic mock pipeline data using actual conversion rates.
-    Pipeline starts with all speaker-opportunity matches and filters through stages.
+
+    When all_matches is provided, uses the top-scoring volunteer-opportunity pairs
+    from the matching engine instead of random pairings. This makes pipeline data
+    realistic — high-scoring matches are the ones that enter the funnel.
+
+    Args:
+        speakers: DataFrame of volunteer profiles.
+        opportunities: DataFrame of CPP events/opportunities.
+        all_matches: Optional DataFrame with columns [volunteer, opportunity, match_score].
+            If provided, top matches populate the pipeline instead of random pairings.
     """
     random.seed(7)  # Seed chosen to produce a realistic demo distribution
     records = []
     base_date = datetime(2026, 1, 15)
 
-    speaker_names = speakers["name"].tolist()
-    opp_names = (opportunities["event_name"].tolist()
-                 if "event_name" in opportunities.columns
-                 else opportunities["title"].tolist())
-
-    # Region info for speakers
+    # Region info for volunteers
     speaker_regions = {}
     for _, s in speakers.iterrows():
         speaker_regions[s["name"]] = s.get("metro_region", "")
 
     # Event types
+    opp_names = (opportunities["event_name"].tolist()
+                 if "event_name" in opportunities.columns
+                 else opportunities["title"].tolist())
     opp_categories = {}
     if "category" in opportunities.columns:
         for _, o in opportunities.iterrows():
             opp_categories[o.get("event_name", o.get("title", ""))] = o.get("category", "Event")
 
-    # Start with ~80 identified opportunities, then cascade through stages
-    n_identified = 80
-    entry_id = 0
+    # Start with 120 identified opportunities (realistic for 17 volunteers × multiple opps)
+    n_identified = 120
 
-    for _ in range(n_identified):
-        speaker = random.choice(speaker_names)
-        opp = random.choice(opp_names)
+    # Build volunteer-opportunity pairs: use top matches if available, else random
+    if all_matches is not None and not all_matches.empty:
+        # Sort by match_score descending, take top N unique pairs
+        sorted_matches = all_matches.sort_values("match_score", ascending=False)
+        # Deduplicate on (volunteer, opportunity) keeping highest score
+        sorted_matches = sorted_matches.drop_duplicates(subset=["volunteer", "opportunity"], keep="first")
+        top_pairs = sorted_matches.head(n_identified)
+
+        pairs = []
+        for _, row in top_pairs.iterrows():
+            pairs.append({
+                "volunteer": row["volunteer"],
+                "opportunity": row["opportunity"],
+                "match_score": round(float(row["match_score"]), 2),
+            })
+        # If we have fewer matches than n_identified, pad with remaining matches
+        if len(pairs) < n_identified:
+            remaining = sorted_matches.iloc[len(pairs):]
+            for _, row in remaining.iterrows():
+                if len(pairs) >= n_identified:
+                    break
+                pairs.append({
+                    "volunteer": row["volunteer"],
+                    "opportunity": row["opportunity"],
+                    "match_score": round(float(row["match_score"]), 2),
+                })
+    else:
+        # Fallback: random pairings (backward compatibility)
+        speaker_names = speakers["name"].tolist()
+        pairs = []
+        for _ in range(n_identified):
+            pairs.append({
+                "volunteer": random.choice(speaker_names),
+                "opportunity": random.choice(opp_names),
+                "match_score": None,
+            })
+
+    entry_id = 0
+    for pair in pairs:
+        speaker = pair["volunteer"]
+        opp = pair["opportunity"]
+        match_score = pair["match_score"]
         region = speaker_regions.get(speaker, "")
         event_type = opp_categories.get(opp, "Event")
         days_offset = random.randint(0, 60)
@@ -84,9 +131,9 @@ def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame) 
         current_date = entry_date
 
         entry_id += 1
-        records.append({
+        record = {
             "id": f"PL-{entry_id:03d}",
-            "speaker": speaker,
+            "volunteer": speaker,
             "opportunity": opp,
             "stage": current_stage,
             "stage_index": 0,
@@ -95,7 +142,11 @@ def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame) 
             "region": region,
             "event_type": event_type,
             "notes": _generate_note(current_stage, speaker, opp),
-        })
+        }
+        if match_score is not None:
+            record["match_score"] = match_score
+
+        records.append(record)
 
         # Advance through stages probabilistically
         for idx in range(len(PIPELINE_STAGES) - 1):
@@ -119,14 +170,14 @@ def generate_mock_pipeline(speakers: pd.DataFrame, opportunities: pd.DataFrame) 
     return pd.DataFrame(records)
 
 
-def _generate_note(stage: str, speaker: str, opp: str) -> str:
+def _generate_note(stage: str, volunteer: str, opp: str) -> str:
     notes_map = {
-        "Identified": f"Identified {opp} as potential match for {speaker}",
+        "Identified": f"Identified {opp} as potential match for {volunteer}",
         "Outreach Sent": f"Sent personalized outreach email to {opp} coordinator",
-        "Engaged": f"Coordinator responded — interested in having {speaker} participate",
-        "Event Scheduled": f"Confirmed {speaker} for upcoming {opp} event",
-        "Event Completed": f"{speaker} successfully participated in {opp}",
-        "Follow-Up": f"Post-event follow-up sent; {speaker} interested in continued engagement",
+        "Engaged": f"Coordinator responded — interested in having {volunteer} participate",
+        "Event Scheduled": f"Confirmed {volunteer} for upcoming {opp} event",
+        "Event Completed": f"{volunteer} successfully participated in {opp}",
+        "Follow-Up": f"Post-event follow-up sent; {volunteer} interested in continued engagement",
         "Membership Lead": f"Contact from {opp} expressed interest in IA membership",
         "Member": f"New IA member converted from {opp} engagement",
     }
@@ -147,7 +198,7 @@ def get_pipeline_summary(pipeline: pd.DataFrame) -> dict:
         "by_stage": ordered,
         "conversion_rate": converted / total if total > 0 else 0,
         "active_pipeline": in_progress,
-        "unique_speakers": pipeline["speaker"].nunique(),
+        "unique_volunteers": pipeline["volunteer"].nunique(),
         "unique_opportunities": pipeline["opportunity"].nunique(),
         "stage_conversions": _compute_stage_conversions(pipeline),
     }
@@ -186,13 +237,13 @@ def get_funnel_data(pipeline: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(counts)
 
 
-def get_metrics_by_speaker(pipeline: pd.DataFrame) -> pd.DataFrame:
-    """Per-speaker pipeline metrics."""
+def get_metrics_by_volunteer(pipeline: pd.DataFrame) -> pd.DataFrame:
+    """Per-volunteer pipeline metrics."""
     metrics = []
-    for speaker, group in pipeline.groupby("speaker"):
+    for volunteer, group in pipeline.groupby("volunteer"):
         furthest = group["stage_index"].max()
         metrics.append({
-            "speaker": speaker,
+            "volunteer": volunteer,
             "total_entries": len(group),
             "furthest_stage": PIPELINE_STAGES[furthest],
             "furthest_stage_index": furthest,
@@ -233,7 +284,7 @@ def get_metrics_by_region(pipeline: pd.DataFrame) -> pd.DataFrame:
             "total_entries": len(group),
             "converted": converted,
             "conversion_rate": converted / len(group) if len(group) > 0 else 0,
-            "unique_speakers": group["speaker"].nunique(),
+            "unique_volunteers": group["volunteer"].nunique(),
             "avg_stage_index": group["stage_index"].mean(),
         })
     return pd.DataFrame(metrics).sort_values("total_entries", ascending=False)

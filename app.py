@@ -10,7 +10,7 @@ from src.outreach_generator import generate_outreach
 from src.discovery import run_discovery_simulation, get_discovery_stats, get_expansion_roadmap
 from src.pipeline_tracker import (
     generate_mock_pipeline, get_pipeline_summary, get_funnel_data,
-    get_metrics_by_speaker, get_metrics_by_event_type, get_metrics_by_region,
+    get_metrics_by_volunteer, get_metrics_by_event_type, get_metrics_by_region,
     PIPELINE_STAGES, STAGE_COLORS, STAGE_CONVERSION_RATES,
 )
 from src.university_scraper import UNIVERSITY_TEMPLATES
@@ -257,7 +257,7 @@ event_matches, course_matches, all_matches = compute_all_matches(
 # SESSION STATE INITIALIZATION
 # ─────────────────────────────────────────────
 init_match_state()
-init_pipeline_state(speakers, cpp_events)
+init_pipeline_state(speakers, cpp_events, all_matches)
 init_outreach_state()
 init_discovery_state()
 
@@ -267,17 +267,18 @@ init_discovery_state()
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("### 🎯 Smart Match")
-    st.caption("AI-Powered Speaker CRM")
+    st.caption("AI-Powered Volunteer CRM")
     st.markdown("---")
 
     st.markdown("##### How Matching Works")
     st.markdown("""
     ```
-    SCORE = 0.35 × Topic
+    SCORE = 0.30 × Topic
          + 0.25 × Role Fit
          + 0.20 × Geography
          + 0.10 × Calendar
-         + 0.10 × Experience
+         + 0.10 × Student Interest
+         + 0.05 × Experience
     ```
     """)
 
@@ -291,6 +292,7 @@ with st.sidebar:
     | **Role** | Keyword taxonomy match |
     | **Geo** | Metro region clustering |
     | **Calendar** | IA event overlap |
+    | **Interest** | Enrollment + audience signals |
     | **Experience** | Seniority parsing |
     """)
 
@@ -311,7 +313,7 @@ with st.sidebar:
         }
         for entry in reversed(st.session_state.action_log[-5:]):
             icon = action_icons.get(entry["action"], "📌")
-            details = entry.get("details", entry.get("speaker", ""))
+            details = entry.get("details", entry.get("volunteer", ""))
             ts = entry["timestamp"].split("T")[-1][:8] if "T" in entry["timestamp"] else entry["timestamp"][-8:]
             st.caption(f"{icon} {details} · {ts}")
 
@@ -322,7 +324,7 @@ with st.sidebar:
 st.markdown("""
 <div class="hero-banner">
     <h1>🎯 IA West Smart Match</h1>
-    <p>AI-powered CRM that discovers university engagement opportunities, matches them with board member volunteers, and tracks the membership conversion pipeline.</p>
+    <p>AI-powered CRM that matches IA West board member volunteers to university engagement opportunities using a 6-component scoring algorithm, then tracks the membership conversion pipeline.</p>
 </div>
 """, unsafe_allow_html=True)
 
@@ -355,7 +357,7 @@ st.markdown(f"""
 # TABS
 # ─────────────────────────────────────────────
 tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-    "👥 Speakers",
+    "👥 Volunteers",
     "🎓 Opportunities",
     "🎯 Smart Matches",
     "✉️ Outreach",
@@ -365,21 +367,21 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
 
 
 # ═══════════════════════════════════════════════
-# TAB 1 — SPEAKER PROFILES
+# TAB 1 — VOLUNTEER PROFILES
 # ═══════════════════════════════════════════════
 with tab1:
     st.markdown('<div class="section-header">👥 IA West Board Members</div>', unsafe_allow_html=True)
-    st.caption("The supply side — 17 volunteer speakers with expertise, roles, and metro regions.")
+    st.caption("The supply side — 17 board member volunteers with expertise, roles, and metro regions.")
 
     col1, col2 = st.columns(2)
     with col1:
         region_filter = st.multiselect(
             "Filter by metro region",
             options=sorted(speakers["metro_region"].unique()),
-            key="speaker_region",
+            key="volunteer_region_filter",
         )
     with col2:
-        search = st.text_input("Search expertise", key="speaker_search",
+        search = st.text_input("Search expertise", key="volunteer_search",
                                placeholder="e.g. AI, healthcare, focus groups")
 
     filtered = speakers.copy()
@@ -390,15 +392,15 @@ with tab1:
 
     st.caption(f"Showing {len(filtered)} of {len(speakers)} members")
 
-    # Speaker profile cards
+    # Volunteer profile cards
     for _, row in filtered.iterrows():
         tags = row.get("expertise_list", [])
         tag_html = "".join([f'<span class="tag-pill">{t}</span>' for t in tags])
 
-        speaker_matches = all_matches[all_matches["speaker"] == row["name"]].head(3)
+        volunteer_matches = all_matches[all_matches["volunteer"] == row["name"]].head(3)
         matches_html = ""
-        if not speaker_matches.empty:
-            for _, m in speaker_matches.iterrows():
+        if not volunteer_matches.empty:
+            for _, m in volunteer_matches.iterrows():
                 pct = int(m["match_score"] * 100)
                 matches_html += f"""
                 <div style="margin:4px 0;display:flex;justify-content:space-between;align-items:center">
@@ -443,7 +445,7 @@ with tab1:
 # ═══════════════════════════════════════════════
 with tab2:
     st.markdown('<div class="section-header">🎓 University Opportunities</div>', unsafe_allow_html=True)
-    st.caption("The demand side — events, courses, and regional conferences seeking volunteer speakers.")
+    st.caption("The demand side — events, courses, and regional conferences seeking board member volunteers.")
 
     opp_sub1, opp_sub2, opp_sub3 = st.tabs(["🎪 CPP Events", "📚 CPP Courses", "🗓️ IA Calendar"])
 
@@ -541,7 +543,7 @@ with tab2:
 # ═══════════════════════════════════════════════
 with tab3:
     st.markdown('<div class="section-header">🎯 Smart Match Recommendations</div>', unsafe_allow_html=True)
-    st.caption("Every speaker scored against every opportunity using a 5-component weighted algorithm.")
+    st.caption("Every volunteer scored against every opportunity using a 5-component weighted algorithm.")
 
     # Filters
     col1, col2, col3 = st.columns(3)
@@ -573,9 +575,9 @@ with tab3:
     # Ranked leaderboard
     st.markdown(f'<div class="section-header">🏆 Top {len(display_matches)} Matches</div>', unsafe_allow_html=True)
     st.dataframe(
-        display_matches[["speaker", "speaker_role", "opportunity", "opportunity_type",
+        display_matches[["volunteer", "volunteer_role", "opportunity", "opportunity_type",
                          "topic_relevance", "role_fit", "geographic_proximity",
-                         "calendar_fit", "match_score"]],
+                         "calendar_fit", "student_interest", "match_score"]],
         use_container_width=True,
         hide_index=True,
         column_config={
@@ -594,6 +596,9 @@ with tab3:
             "calendar_fit": st.column_config.ProgressColumn(
                 "Calendar", format="%.0f%%", min_value=0, max_value=1,
             ),
+            "student_interest": st.column_config.ProgressColumn(
+                "Interest", format="%.0f%%", min_value=0, max_value=1,
+            ),
         },
     )
 
@@ -602,16 +607,16 @@ with tab3:
     st.caption("Click any match to see why the algorithm recommended it.")
     for idx, row in display_matches.head(10).iterrows():
         score_pct = f"{row['match_score']:.0%}"
-        with st.expander(f"**{row['speaker']}** → {row['opportunity']} — **{score_pct}**"):
+        with st.expander(f"**{row['volunteer']}** → {row['opportunity']} — **{score_pct}**"):
             c1, c2 = st.columns([3, 2])
             with c1:
                 explanation = explain_match(row)
                 st.markdown(explanation)
             with c2:
-                categories = ["Topic", "Role Fit", "Geography", "Calendar", "Experience"]
+                categories = ["Topic", "Role Fit", "Geography", "Calendar", "Interest", "Experience"]
                 values = [row["topic_relevance"], row["role_fit"],
                           row["geographic_proximity"], row["calendar_fit"],
-                          row["historical_bonus"]]
+                          row["student_interest"], row["historical_bonus"]]
 
                 fig = go.Figure(data=go.Scatterpolar(
                     r=values + [values[0]],
@@ -640,15 +645,15 @@ with tab3:
                 st.plotly_chart(fig, use_container_width=True, key=f"radar_{idx}")
 
             # Match approval buttons
-            render_match_actions(row["speaker"], row["opportunity"], idx)
+            render_match_actions(row["volunteer"], row["opportunity"], idx)
 
     # Heatmap
-    st.markdown('<div class="section-header">🗺️ Speaker × Opportunity Heatmap</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">🗺️ Volunteer × Opportunity Heatmap</div>', unsafe_allow_html=True)
     st.caption("Top 8 opportunities by average score.")
     top_opps = all_matches.groupby("opportunity")["match_score"].mean().nlargest(8).index.tolist()
     heatmap_data = all_matches[all_matches["opportunity"].isin(top_opps)]
     pivot = heatmap_data.pivot_table(
-        index="speaker", columns="opportunity", values="match_score", aggfunc="first"
+        index="volunteer", columns="opportunity", values="match_score", aggfunc="first"
     )
     fig = px.imshow(
         pivot, color_continuous_scale=["#0e1117", "#1a3a5c", "#28a745", "#7ec8e3"], aspect="auto",
@@ -675,10 +680,10 @@ with tab4:
 
     col1, col2 = st.columns(2)
     with col1:
-        selected_speaker = st.selectbox(
-            "Select speaker",
+        selected_volunteer = st.selectbox(
+            "Select volunteer",
             options=["All"] + sorted(speakers["name"].tolist()),
-            key="outreach_speaker",
+            key="outreach_volunteer",
         )
     with col2:
         outreach_type = st.selectbox(
@@ -688,18 +693,18 @@ with tab4:
         )
 
     outreach_matches = all_matches[all_matches["opportunity_type"] == outreach_type]
-    if selected_speaker != "All":
-        outreach_matches = outreach_matches[outreach_matches["speaker"] == selected_speaker]
+    if selected_volunteer != "All":
+        outreach_matches = outreach_matches[outreach_matches["volunteer"] == selected_volunteer]
     outreach_matches = outreach_matches.head(5)
 
     if outreach_matches.empty:
         st.info("No matches found for the selected filters.")
     else:
         for _, match_row in outreach_matches.iterrows():
-            speaker_data = speakers[speakers["name"] == match_row["speaker"]].iloc[0]
+            volunteer_data = speakers[speakers["name"] == match_row["volunteer"]].iloc[0]
             enriched = match_row.to_dict()
-            enriched["speaker_title"] = speaker_data.get("title", "")
-            enriched["speaker_company"] = speaker_data.get("company", "")
+            enriched["volunteer_title"] = volunteer_data.get("title", "")
+            enriched["volunteer_company"] = volunteer_data.get("company", "")
 
             opp_data = {}
             if outreach_type == "event":
@@ -714,17 +719,17 @@ with tab4:
             email = generate_outreach(enriched, opp_data, outreach_type)
             score_pct = f"{match_row['match_score']:.0%}"
 
-            with st.expander(f"✉️ **{match_row['speaker']}** → {match_row['opportunity']} ({score_pct})"):
+            with st.expander(f"✉️ **{match_row['volunteer']}** → {match_row['opportunity']} ({score_pct})"):
                 st.markdown(f'<div class="email-preview">{email}</div>', unsafe_allow_html=True)
                 st.download_button(
                     label="📥 Download draft",
                     data=email,
-                    file_name=f"outreach_{match_row['speaker'].replace(' ', '_')}_{match_row['opportunity'][:30].replace(' ', '_')}.txt",
+                    file_name=f"outreach_{match_row['volunteer'].replace(' ', '_')}_{match_row['opportunity'][:30].replace(' ', '_')}.txt",
                     mime="text/plain",
-                    key=f"dl_{match_row['speaker']}_{match_row['opportunity']}_{outreach_type}",
+                    key=f"dl_{match_row['volunteer']}_{match_row['opportunity']}_{outreach_type}",
                 )
                 st.markdown("---")
-                render_outreach_actions(match_row['speaker'], match_row['opportunity'], outreach_type)
+                render_outreach_actions(match_row['volunteer'], match_row['opportunity'], outreach_type)
 
 
 # ═══════════════════════════════════════════════
@@ -758,8 +763,8 @@ with tab5:
             <div class="kpi-label">Conversion Rate</div>
         </div>
         <div class="kpi-card purple">
-            <div class="kpi-value">{summary['unique_speakers']}</div>
-            <div class="kpi-label">Speakers Engaged</div>
+            <div class="kpi-value">{summary["unique_volunteers"]}</div>
+            <div class="kpi-label">Volunteers Engaged</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -810,13 +815,13 @@ with tab5:
         st.plotly_chart(fig, use_container_width=True)
 
     # Sub-breakdowns
-    pipe_sub1, pipe_sub2, pipe_sub3 = st.tabs(["By Speaker", "By Event Type", "By Region"])
+    pipe_sub1, pipe_sub2, pipe_sub3 = st.tabs(["By Volunteer", "By Event Type", "By Region"])
 
     with pipe_sub1:
-        speaker_metrics = get_metrics_by_speaker(pipeline)
-        if not speaker_metrics.empty:
+        volunteer_metrics = get_metrics_by_volunteer(pipeline)
+        if not volunteer_metrics.empty:
             st.dataframe(
-                speaker_metrics[["speaker", "total_entries", "furthest_stage",
+                volunteer_metrics[["volunteer", "total_entries", "furthest_stage",
                                  "region", "avg_stage_index"]].rename(columns={
                     "avg_stage_index": "Avg Progress"
                 }),
@@ -825,13 +830,13 @@ with tab5:
                     "Avg Progress": st.column_config.ProgressColumn("Progress", min_value=0, max_value=7),
                 },
             )
-            fig = px.bar(speaker_metrics.head(10), x="speaker", y="avg_stage_index",
+            fig = px.bar(volunteer_metrics.head(10), x="volunteer", y="avg_stage_index",
                          color="furthest_stage",
                          labels={"avg_stage_index": "Avg Progress"})
             fig.update_layout(height=320, margin=dict(l=0, r=0, t=10, b=0),
                               paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
                               font=dict(color="#a0b4c8"))
-            st.plotly_chart(fig, use_container_width=True, key="pipe_speaker_chart")
+            st.plotly_chart(fig, use_container_width=True, key="pipe_volunteer_chart")
 
     with pipe_sub2:
         event_metrics = get_metrics_by_event_type(pipeline)

@@ -1,7 +1,7 @@
 """Match Approval Workflow for Smart Matches (Tab 3).
 
 Provides session-state-backed approval/rejection/shortlisting of
-speaker-opportunity matches, with an action log and decision summary.
+volunteer-opportunity matches, with an action log and decision summary.
 """
 
 import streamlit as st
@@ -78,23 +78,23 @@ def log_action(action: str, details: str, tab: str = "Smart Matches") -> None:
 # Decision Badge
 # ─────────────────────────────────────────────
 
-def _make_decision_key(speaker: str, opportunity: str) -> str:
-    """Build a canonical key for a speaker|opportunity pair."""
-    return f"{speaker}|{opportunity}"
+def _make_decision_key(volunteer: str, opportunity: str) -> str:
+    """Build a canonical key for a volunteer|opportunity pair."""
+    return f"{volunteer}|{opportunity}"
 
 
-def get_decision_badge(speaker: str, opportunity: str) -> str:
+def get_decision_badge(volunteer: str, opportunity: str) -> str:
     """Return an HTML badge for the current decision, or empty string.
 
     Args:
-        speaker: Speaker name.
+        volunteer: Volunteer name.
         opportunity: Opportunity name.
 
     Returns:
         HTML string with a styled badge, or "" if undecided.
     """
     init_match_state()
-    key = _make_decision_key(speaker, opportunity)
+    key = _make_decision_key(volunteer, opportunity)
     decision = st.session_state.match_decisions.get(key)
     if decision is None:
         return ""
@@ -111,16 +111,16 @@ def get_decision_badge(speaker: str, opportunity: str) -> str:
 # Match Action Buttons
 # ─────────────────────────────────────────────
 
-def render_match_actions(speaker: str, opportunity: str, idx: int) -> None:
+def render_match_actions(volunteer: str, opportunity: str, idx: int) -> None:
     """Render approve / shortlist / reject buttons inside a match expander.
 
     Args:
-        speaker: Speaker name.
+        volunteer: Volunteer name.
         opportunity: Opportunity name.
         idx: Unique index for generating non-colliding Streamlit widget keys.
     """
     init_match_state()
-    key = _make_decision_key(speaker, opportunity)
+    key = _make_decision_key(volunteer, opportunity)
     current = st.session_state.match_decisions.get(key)
 
     # Show current decision badge if one exists
@@ -129,7 +129,7 @@ def render_match_actions(speaker: str, opportunity: str, idx: int) -> None:
         st.markdown(
             f'<div style="margin-bottom:0.6rem">'
             f'<span style="color:#8899aa;font-size:0.85em">Current status:</span> '
-            f'{get_decision_badge(speaker, opportunity)}'
+            f'{get_decision_badge(volunteer, opportunity)}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -145,8 +145,8 @@ def render_match_actions(speaker: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "approved"
-            log_action("Approved", f"{speaker} → {opportunity}")
-            st.toast(f"Approved: {speaker} → {opportunity}", icon="✅")
+            log_action("Approved", f"{volunteer} → {opportunity}")
+            st.toast(f"Approved: {volunteer} → {opportunity}", icon="✅")
             st.rerun()
 
     with col_shortlist:
@@ -157,8 +157,8 @@ def render_match_actions(speaker: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "shortlisted"
-            log_action("Shortlisted", f"{speaker} → {opportunity}")
-            st.toast(f"Shortlisted: {speaker} → {opportunity}", icon="⭐")
+            log_action("Shortlisted", f"{volunteer} → {opportunity}")
+            st.toast(f"Shortlisted: {volunteer} → {opportunity}", icon="⭐")
             st.rerun()
 
     with col_reject:
@@ -169,8 +169,8 @@ def render_match_actions(speaker: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "rejected"
-            log_action("Rejected", f"{speaker} → {opportunity}")
-            st.toast(f"Rejected: {speaker} → {opportunity}", icon="❌")
+            log_action("Rejected", f"{volunteer} → {opportunity}")
+            st.toast(f"Rejected: {volunteer} → {opportunity}", icon="❌")
             st.rerun()
 
 
@@ -185,7 +185,7 @@ def render_decision_summary(all_matches: pd.DataFrame) -> None:
     with counts and a filterable table of decided matches.
 
     Args:
-        all_matches: The full matches DataFrame (needs 'speaker' and
+        all_matches: The full matches DataFrame (needs 'volunteer' and
                      'opportunity' columns to cross-reference decisions).
     """
     init_match_state()
@@ -236,10 +236,10 @@ def render_decision_summary(all_matches: pd.DataFrame) -> None:
         parts = pair_key.split("|", 1)
         if len(parts) != 2:
             continue
-        speaker, opportunity = parts
+        volunteer_name, opportunity = parts
         style = DECISION_STYLES[status]
         rows.append({
-            "Speaker": speaker,
+            "Volunteer": volunteer_name,
             "Opportunity": opportunity,
             "Status": style["label"],
         })
@@ -265,7 +265,7 @@ def render_decision_summary(all_matches: pd.DataFrame) -> None:
         use_container_width=True,
         hide_index=True,
         column_config={
-            "Speaker": st.column_config.TextColumn("Speaker", width="medium"),
+            "Volunteer": st.column_config.TextColumn("Volunteer", width="medium"),
             "Opportunity": st.column_config.TextColumn("Opportunity", width="large"),
             "Status": st.column_config.TextColumn("Status", width="small"),
         },

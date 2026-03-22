@@ -18,9 +18,11 @@ Smart Match solves the volunteer coordination problem for professional associati
 MATCH_SCORE = 0.30 × Topic Relevance      (TF-IDF cosine similarity)
             + 0.25 × Role Fit             (expertise-to-role alignment)
             + 0.20 × Geographic Proximity  (metro region clustering)
-            + 0.15 × Calendar Fit          (IA event schedule overlap)
-            + 0.10 × Historical Bonus      (past engagement record)
+            + 0.10 × Calendar Fit          (IA event schedule overlap)
+            + 0.05 × Experience Bonus      (past engagement record)
 ```
+
+> **Note:** Student Interest Signal (enrollment trends, Google Trends) is planned for Phase 2 but not yet implemented in the prototype.
 
 ## Setup
 

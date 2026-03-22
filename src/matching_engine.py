@@ -1,4 +1,4 @@
-"""Core matching algorithm: speaker-to-opportunity scoring.
+"""Core matching algorithm: volunteer-to-opportunity scoring.
 
 Uses TF-IDF cosine similarity for topic relevance, role-keyword mapping for
 role fit, geographic clustering for proximity, and IA event calendar overlap
@@ -45,9 +45,9 @@ CLUSTER_LABELS = {
 }
 
 
-def _geo_score(speaker_region: str, opp_region: str) -> float:
+def _geo_score(volunteer_region: str, opp_region: str) -> float:
     """Geographic proximity score."""
-    s_cluster = REGION_CLUSTERS.get(speaker_region, speaker_region)
+    s_cluster = REGION_CLUSTERS.get(volunteer_region, volunteer_region)
     o_cluster = REGION_CLUSTERS.get(opp_region, "LA")  # CPP default
     if s_cluster == o_cluster:
         return 1.0
@@ -78,9 +78,9 @@ ROLE_KEYWORD_MAP = {
 }
 
 
-def _role_fit_score(speaker_tags: str, event_roles: str) -> float:
+def _role_fit_score(volunteer_tags: str, event_roles: str) -> float:
     """Role-fit score based on keyword overlap between expertise and needed roles."""
-    tags_lower = speaker_tags.lower()
+    tags_lower = volunteer_tags.lower()
     roles_lower = event_roles.lower()
 
     matched_roles = 0
@@ -98,9 +98,9 @@ def _role_fit_score(speaker_tags: str, event_roles: str) -> float:
     return max(0.3, min(1.0, matched_roles / total_roles))
 
 
-def _role_fit_details(speaker_tags: str, event_roles: str) -> list[str]:
+def _role_fit_details(volunteer_tags: str, event_roles: str) -> list[str]:
     """Return which roles matched for explanation purposes."""
-    tags_lower = speaker_tags.lower()
+    tags_lower = volunteer_tags.lower()
     roles_lower = event_roles.lower()
     matched = []
     for role, keywords in ROLE_KEYWORD_MAP.items():
@@ -115,25 +115,25 @@ def _role_fit_details(speaker_tags: str, event_roles: str) -> list[str]:
 # ---------------------------------------------------------------------------
 # Calendar / schedule overlap
 # ---------------------------------------------------------------------------
-def _calendar_fit_score(speaker_region: str, event_calendar: pd.DataFrame,
+def _calendar_fit_score(volunteer_region: str, event_calendar: pd.DataFrame,
                         opp_region: str = None) -> float:
     """
-    Check if there is an IA regional event that aligns both the speaker's
+    Check if there is an IA regional event that aligns both the volunteer's
     location and the opportunity's location in the same time window.
     """
     if event_calendar is None or event_calendar.empty:
         return 0.5
 
-    s_cluster = REGION_CLUSTERS.get(speaker_region, speaker_region)
+    s_cluster = REGION_CLUSTERS.get(volunteer_region, volunteer_region)
     o_cluster = REGION_CLUSTERS.get(opp_region, "LA") if opp_region else "LA"
 
     best = 0.3
     for _, row in event_calendar.iterrows():
         e_cluster = REGION_CLUSTERS.get(row.get("region", ""), "")
-        # Best: IA event in the same region as both speaker AND opportunity
+        # Best: IA event in the same region as both volunteer AND opportunity
         if s_cluster == e_cluster and o_cluster == e_cluster:
             return 1.0
-        # Good: IA event in speaker's region (they'll already be travelling)
+        # Good: IA event in volunteer's region (they'll already be travelling)
         if s_cluster == e_cluster:
             best = max(best, 0.85)
         # Okay: adjacent
@@ -166,6 +166,50 @@ def _experience_bonus(expertise_tags: str) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Student interest signal (Factor 6)
+# ---------------------------------------------------------------------------
+def _compute_student_interest(opp_row: pd.Series, opp_type: str) -> float:
+    """Estimate student interest from enrollment capacity or audience keywords.
+
+    For courses: higher enrollment_cap signals stronger demand.
+    For events: broad audience keywords signal wider appeal.
+    A boost is applied for high-interest categories (hackathons, competitions).
+    """
+    score = 0.5  # default
+
+    if opp_type == "course":
+        cap = opp_row.get("enrollment_cap", 0)
+        try:
+            cap = int(cap)
+        except (ValueError, TypeError):
+            cap = 0
+        if cap >= 45:
+            score = 0.9
+        elif cap >= 30:
+            score = 0.7
+        elif cap >= 20:
+            score = 0.5
+        else:
+            score = 0.3
+    else:
+        audience = str(opp_row.get("audience", "")).lower()
+        if "all students" in audience or "open" in audience:
+            score = 0.9
+        elif "undergraduate" in audience or "graduate" in audience:
+            score = 0.7
+        else:
+            score = 0.5
+
+    # Boost for high-interest categories
+    category = str(opp_row.get("category", "")).lower()
+    if "hackathon" in category or "competition" in category:
+        score = min(1.0, score + 0.1)
+
+    return score
+
+
+
+# ---------------------------------------------------------------------------
 # Main matching engine
 # ---------------------------------------------------------------------------
 def compute_matches(
@@ -175,13 +219,14 @@ def compute_matches(
     opp_type: str = "event",
 ) -> pd.DataFrame:
     """
-    Compute match scores between all speakers and all opportunities.
+    Compute match scores between all volunteers and all opportunities.
 
-    MATCH_SCORE = 0.35 * topic_relevance   (TF-IDF cosine similarity)
-               + 0.25 * role_fit           (keyword matching)
+    MATCH_SCORE = 0.30 * topic_relevance      (TF-IDF cosine similarity)
+               + 0.25 * role_fit              (keyword matching)
                + 0.20 * geographic_proximity
-               + 0.10 * calendar_fit       (IA event overlap)
-               + 0.10 * historical_bonus   (experience heuristic)
+               + 0.10 * calendar_fit          (IA event overlap)
+               + 0.05 * historical_bonus      (experience heuristic)
+               + 0.10 * student_interest      (enrollment / audience signal)
     """
     # Build enriched text for better TF-IDF matching
     speaker_texts = []
@@ -249,19 +294,22 @@ def compute_matches(
 
             historical = _experience_bonus(speaker.get("expertise_tags", ""))
 
+            interest = _compute_student_interest(opp, opp_type)
+
             composite = (
-                0.35 * topic_score
+                0.30 * topic_score
                 + 0.25 * role_score
                 + 0.20 * geo_score
                 + 0.10 * cal_score
-                + 0.10 * historical
+                + 0.05 * historical
+                + 0.10 * interest
             )
 
             results.append({
-                "speaker": speaker["name"],
-                "speaker_role": speaker.get("board_role", ""),
-                "speaker_expertise": speaker.get("expertise_tags", ""),
-                "speaker_region": speaker.get("metro_region", ""),
+                "volunteer": speaker["name"],
+                "volunteer_role": speaker.get("board_role", ""),
+                "volunteer_expertise": speaker.get("expertise_tags", ""),
+                "volunteer_region": speaker.get("metro_region", ""),
                 "opportunity": opp[opp_name_col],
                 "opportunity_type": opp_type,
                 "opp_roles": opp.get(opp_roles_col, ""),
@@ -272,6 +320,7 @@ def compute_matches(
                 "geographic_proximity": round(geo_score, 3),
                 "calendar_fit": round(cal_score, 3),
                 "historical_bonus": round(historical, 3),
+                "student_interest": round(interest, 3),
                 "match_score": round(composite, 3),
             })
 
@@ -285,13 +334,13 @@ def get_top_matches(matches: pd.DataFrame, n: int = 10) -> pd.DataFrame:
     return matches.head(n)
 
 
-def get_top_for_speaker(matches: pd.DataFrame, speaker_name: str, n: int = 5) -> pd.DataFrame:
-    """Return top N matches for a specific speaker."""
-    return matches[matches["speaker"] == speaker_name].head(n)
+def get_top_for_volunteer(matches: pd.DataFrame, speaker_name: str, n: int = 5) -> pd.DataFrame:
+    """Return top N matches for a specific volunteer."""
+    return matches[matches["volunteer"] == speaker_name].head(n)
 
 
 def get_top_for_opportunity(matches: pd.DataFrame, opp_name: str, n: int = 5) -> pd.DataFrame:
-    """Return top N speakers for a specific opportunity."""
+    """Return top N volunteers for a specific opportunity."""
     return matches[matches["opportunity"] == opp_name].head(n)
 
 
@@ -301,7 +350,7 @@ def explain_match(row: pd.Series) -> str:
 
     # Header
     parts.append(f"### Why this match?")
-    parts.append(f"**{row['speaker']}** ({row['speaker_role']}) matched to "
+    parts.append(f"**{row['volunteer']}** ({row['volunteer_role']}) matched to "
                  f"**{row['opportunity']}** with a composite score of "
                  f"**{row['match_score']:.1%}**.\n")
 
@@ -311,7 +360,7 @@ def explain_match(row: pd.Series) -> str:
                  f"{'Strong' if topic_pct > 0.6 else 'Moderate' if topic_pct > 0.3 else 'Low'} "
                  f"overlap between expertise tags and opportunity description.")
     # Show which tags likely drove the match
-    speaker_tags = [t.strip() for t in str(row.get('speaker_expertise', '')).split(',') if t.strip()]
+    speaker_tags = [t.strip() for t in str(row.get('volunteer_expertise', '')).split(',') if t.strip()]
     opp_text = str(row.get('opportunity', '')).lower() + " " + str(row.get('opp_roles', '')).lower()
     overlapping = [t for t in speaker_tags if any(w in opp_text for w in t.lower().split())]
     if overlapping:
@@ -320,7 +369,7 @@ def explain_match(row: pd.Series) -> str:
     # --- Role fit ---
     role_pct = row['role_fit']
     role_details = _role_fit_details(
-        str(row.get('speaker_expertise', '')),
+        str(row.get('volunteer_expertise', '')),
         str(row.get('opp_roles', ''))
     )
     parts.append(f"\n**Role Fit** ({role_pct:.0%}) — "
@@ -332,7 +381,7 @@ def explain_match(row: pd.Series) -> str:
 
     # --- Geographic proximity ---
     geo_pct = row['geographic_proximity']
-    s_region = row.get('speaker_region', '')
+    s_region = row.get('volunteer_region', '')
     o_region = row.get('opp_region', 'Cal Poly Pomona area')
     if geo_pct >= 1.0:
         geo_note = f"Same metro region ({s_region})"
@@ -345,7 +394,7 @@ def explain_match(row: pd.Series) -> str:
     # --- Calendar fit ---
     cal_pct = row['calendar_fit']
     if cal_pct >= 0.85:
-        cal_note = "IA regional event in speaker's area creates a natural travel window"
+        cal_note = "IA regional event in volunteer's area creates a natural travel window"
     elif cal_pct >= 0.6:
         cal_note = "IA event in an adjacent region; could combine trips"
     else:
@@ -362,9 +411,20 @@ def explain_match(row: pd.Series) -> str:
         hist_note = "Standard experience level"
     parts.append(f"\n**Experience Bonus** ({hist_pct:.0%}) — {hist_note}")
 
+    # --- Student interest signal ---
+    interest_pct = row.get('student_interest', 0.5)
+    if interest_pct >= 0.8:
+        interest_note = "High student demand — large enrollment or broad audience appeal"
+    elif interest_pct >= 0.6:
+        interest_note = "Moderate student interest — solid enrollment or targeted audience"
+    else:
+        interest_note = "Niche interest — smaller or specialized audience"
+    parts.append(f"\n**Student Interest** ({interest_pct:.0%}) — {interest_note}")
+
     # --- Score formula ---
-    parts.append(f"\n---\n*Score = 0.35({topic_pct:.2f}) + 0.25({role_pct:.2f}) "
-                 f"+ 0.20({geo_pct:.2f}) + 0.10({cal_pct:.2f}) + 0.10({hist_pct:.2f}) "
+    parts.append(f"\n---\n*Score = 0.30({topic_pct:.2f}) + 0.25({role_pct:.2f}) "
+                 f"+ 0.20({geo_pct:.2f}) + 0.10({cal_pct:.2f}) + 0.05({hist_pct:.2f}) "
+                 f"+ 0.10({interest_pct:.2f}) "
                  f"= **{row['match_score']:.3f}***")
 
     return "\n".join(parts)

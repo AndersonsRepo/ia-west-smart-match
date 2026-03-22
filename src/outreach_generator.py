@@ -3,26 +3,26 @@
 from datetime import datetime
 
 TEMPLATES = {
-    "guest_speaker": """Subject: Guest Speaker Invitation — {event_name} at Cal Poly Pomona
+    "guest_speaker": """Subject: Volunteer Speaker Invitation — {event_name} at Cal Poly Pomona
 
 Dear {contact_name},
 
-I'm writing on behalf of the Insights Association West Chapter to connect you with an outstanding industry professional for an upcoming speaking opportunity.
+I'm writing on behalf of the Insights Association West Chapter to connect you with an outstanding industry professional for an upcoming volunteer engagement opportunity.
 
-**Recommended Speaker:** {speaker_name}
-**Current Role:** {speaker_title} at {speaker_company}
+**Recommended Volunteer:** {volunteer_name}
+**Current Role:** {volunteer_title} at {volunteer_company}
 **Expertise:** {expertise}
 
-{speaker_name} is a member of the IA West board serving as {speaker_role}, and their expertise in {top_tags} aligns strongly with {event_name}. Based on our matching analysis, this is a {score_label} fit ({match_score:.0%} match score).
+{volunteer_name} is a member of the IA West board serving as {board_role}, and their expertise in {top_tags} aligns strongly with {event_name}. Based on our matching analysis, this is a {score_label} fit ({match_score:.0%} match score).
 
 **Why this match works:**
 - {reason_1}
 - {reason_2}
 - {reason_3}
 
-We'd love to coordinate a {volunteer_role} opportunity. {speaker_name} is based in {speaker_region}, and we have IA events in the area that could create a natural touchpoint.
+We'd love to coordinate a {volunteer_role} opportunity. {volunteer_name} is based in {volunteer_region}, and we have IA events in the area that could create a natural touchpoint.
 
-Would you be open to a brief call to discuss how {speaker_name} could contribute to your program?
+Would you be open to a brief call to discuss how {volunteer_name} could contribute to your program?
 
 Best regards,
 IA West Smart Match Team
@@ -38,11 +38,11 @@ Dear Professor {instructor},
 
 The Insights Association West Chapter has identified a potential guest lecturer who would bring valuable industry perspective to your {course_title} course.
 
-**Recommended Speaker:** {speaker_name}
-**Current Role:** {speaker_title} at {speaker_company}
+**Recommended Volunteer:** {volunteer_name}
+**Current Role:** {volunteer_title} at {volunteer_company}
 **Areas of Expertise:** {expertise}
 
-Our matching algorithm identified a {score_label} alignment ({match_score:.0%}) between {speaker_name}'s expertise and your course content. As a {speaker_role} on the IA West board, they bring both deep domain knowledge and a passion for mentoring the next generation of marketing professionals.
+Our matching algorithm identified a {score_label} alignment ({match_score:.0%}) between {volunteer_name}'s expertise and your course content. As a {board_role} on the IA West board, they bring both deep domain knowledge and a passion for mentoring the next generation of marketing professionals.
 
 **Suggested Topics:**
 - {topic_1}
@@ -51,7 +51,7 @@ Our matching algorithm identified a {score_label} alignment ({match_score:.0%}) 
 **Logistics:**
 - Your course meets on {days} from {start_time} to {end_time}
 - Course mode: {mode}
-- {speaker_name} is based in {speaker_region}
+- {volunteer_name} is based in {volunteer_region}
 
 The IA West regional event calendar includes events near Cal Poly Pomona, creating natural opportunities for in-person engagement.
 
@@ -85,16 +85,16 @@ def _extract_top_tags(expertise: str, n: int = 3) -> str:
 def _generate_reasons(match_row) -> list:
     reasons = []
     if match_row.get("topic_relevance", 0) > 0.3:
-        reasons.append(f"Strong topic alignment between their expertise ({match_row.get('speaker_expertise', '')[:60]}...) and the opportunity's focus area")
+        reasons.append(f"Strong topic alignment between their expertise ({match_row.get('volunteer_expertise', '')[:60]}...) and the opportunity's focus area")
     else:
-        reasons.append(f"Their background in {_extract_top_tags(match_row.get('speaker_expertise', ''), 2)} brings a complementary perspective")
+        reasons.append(f"Their background in {_extract_top_tags(match_row.get('volunteer_expertise', ''), 2)} brings a complementary perspective")
 
     if match_row.get("geographic_proximity", 0) >= 0.8:
-        reasons.append(f"Located in {match_row.get('speaker_region', 'the area')}, making in-person participation convenient")
+        reasons.append(f"Located in {match_row.get('volunteer_region', 'the area')}, making in-person participation convenient")
     elif match_row.get("geographic_proximity", 0) >= 0.5:
-        reasons.append(f"Based in nearby {match_row.get('speaker_region', 'region')}, within reasonable travel distance")
+        reasons.append(f"Based in nearby {match_row.get('volunteer_region', 'region')}, within reasonable travel distance")
     else:
-        reasons.append(f"Available for virtual participation from {match_row.get('speaker_region', 'their region')}")
+        reasons.append(f"Available for virtual participation from {match_row.get('volunteer_region', 'their region')}")
 
     if match_row.get("role_fit", 0) > 0.5:
         reasons.append("Their skill set directly maps to the volunteer roles needed for this opportunity")
@@ -112,16 +112,16 @@ def generate_event_outreach(match_row: dict, event_data: dict = None) -> str:
     return TEMPLATES["guest_speaker"].format(
         event_name=match_row.get("opportunity", "the event"),
         contact_name=event_data.get("contact_name", "Program Coordinator"),
-        speaker_name=match_row.get("speaker", ""),
-        speaker_title=match_row.get("speaker_title", "Industry Leader"),
-        speaker_company=match_row.get("speaker_company", ""),
-        expertise=match_row.get("speaker_expertise", ""),
-        speaker_role=match_row.get("speaker_role", "Board Member"),
-        top_tags=_extract_top_tags(match_row.get("speaker_expertise", "")),
+        volunteer_name=match_row.get("volunteer", ""),
+        volunteer_title=match_row.get("volunteer_title", "Industry Leader"),
+        volunteer_company=match_row.get("volunteer_company", ""),
+        expertise=match_row.get("volunteer_expertise", ""),
+        board_role=match_row.get("volunteer_role", "Board Member"),
+        top_tags=_extract_top_tags(match_row.get("volunteer_expertise", "")),
         score_label=_score_label(match_row.get("match_score", 0)),
         match_score=match_row.get("match_score", 0),
         volunteer_role=event_data.get("volunteer_roles", "guest speaker"),
-        speaker_region=match_row.get("speaker_region", ""),
+        volunteer_region=match_row.get("volunteer_region", ""),
         reason_1=reasons[0],
         reason_2=reasons[1],
         reason_3=reasons[2],
@@ -132,7 +132,7 @@ def generate_event_outreach(match_row: dict, event_data: dict = None) -> str:
 def generate_course_outreach(match_row: dict, course_data: dict = None) -> str:
     """Generate outreach email for a course guest lecture match."""
     course_data = course_data or {}
-    expertise = match_row.get("speaker_expertise", "")
+    expertise = match_row.get("volunteer_expertise", "")
     tags = [t.strip() for t in expertise.split(",") if t.strip()]
 
     topics = []
@@ -147,20 +147,20 @@ def generate_course_outreach(match_row: dict, course_data: dict = None) -> str:
         course_title=course_data.get("title", match_row.get("opportunity", "")),
         course_code=course_data.get("course", ""),
         instructor=course_data.get("instructor", ""),
-        speaker_name=match_row.get("speaker", ""),
-        speaker_title=match_row.get("speaker_title", "Industry Leader"),
-        speaker_company=match_row.get("speaker_company", ""),
+        volunteer_name=match_row.get("volunteer", ""),
+        volunteer_title=match_row.get("volunteer_title", "Industry Leader"),
+        volunteer_company=match_row.get("volunteer_company", ""),
         expertise=expertise,
         score_label=_score_label(match_row.get("match_score", 0)),
         match_score=match_row.get("match_score", 0),
-        speaker_role=match_row.get("speaker_role", "Board Member"),
+        board_role=match_row.get("volunteer_role", "Board Member"),
         topic_1=topics[0],
         topic_2=topics[1] if len(topics) > 1 else "Q&A with students",
         days=course_data.get("days", ""),
         start_time=course_data.get("start_time", ""),
         end_time=course_data.get("end_time", ""),
         mode=course_data.get("mode", ""),
-        speaker_region=match_row.get("speaker_region", ""),
+        volunteer_region=match_row.get("volunteer_region", ""),
         date=datetime.now().strftime("%B %d, %Y"),
     )
 

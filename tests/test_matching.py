@@ -1,7 +1,7 @@
 """Tests for the Smart Match matching engine.
 
 Verifies that the algorithm produces correct, explainable results for
-known speaker-opportunity pairs.
+known volunteer-opportunity pairs.
 """
 
 import sys
@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pandas as pd
 from src.data_loader import load_all
-from src.matching_engine import compute_matches, explain_match, get_top_for_speaker
+from src.matching_engine import compute_matches, explain_match, get_top_for_volunteer
 
 
 def setup():
@@ -30,17 +30,17 @@ def setup():
 
 
 def test_all_speakers_have_matches(data, all_matches):
-    """Every speaker should have at least one match."""
+    """Every volunteer should have at least one match."""
     speaker_names = set(data["speakers"]["name"].tolist())
-    matched_speakers = set(all_matches["speaker"].unique())
-    missing = speaker_names - matched_speakers
+    matched_volunteers = set(all_matches["volunteer"].unique())
+    missing = speaker_names - matched_volunteers
     assert len(missing) == 0, f"Speakers without matches: {missing}"
-    print(f"  PASS: All {len(speaker_names)} speakers have matches")
+    print(f"  PASS: All {len(speaker_names)} volunteers have matches")
 
 
 def test_yufan_lin_ai_hackathon(event_matches):
     """Dr. Yufan Lin (AI, marketing research) should match highest with AI Hackathon events."""
-    lin_matches = event_matches[event_matches["speaker"] == "Dr. Yufan Lin"]
+    lin_matches = event_matches[event_matches["volunteer"] == "Dr. Yufan Lin"]
     top_5 = lin_matches.head(5)
     top_opportunities = top_5["opportunity"].tolist()
 
@@ -65,7 +65,7 @@ def test_yufan_lin_ai_hackathon(event_matches):
 
 def test_yufan_lin_marketing_courses(course_matches):
     """Dr. Yufan Lin should match well with Marketing Research courses."""
-    lin_courses = course_matches[course_matches["speaker"] == "Dr. Yufan Lin"]
+    lin_courses = course_matches[course_matches["volunteer"] == "Dr. Yufan Lin"]
     top_5 = lin_courses.head(5)
 
     # Marketing Research should appear in top matches
@@ -81,7 +81,7 @@ def test_yufan_lin_marketing_courses(course_matches):
 
 def test_greg_carter_qualitative(event_matches):
     """Greg Carter (40 yrs, focus groups) should match with qualitative-focused events."""
-    carter = event_matches[event_matches["speaker"] == "Greg Carter"]
+    carter = event_matches[event_matches["volunteer"] == "Greg Carter"]
     assert not carter.empty, "Greg Carter should have event matches"
 
     # His top matches should include research-oriented events
@@ -101,25 +101,25 @@ def test_greg_carter_qualitative(event_matches):
 
 
 def test_geographic_la_speakers(event_matches):
-    """LA-area speakers should score higher for CPP (LA) events than remote speakers."""
-    # Compare average geo scores for LA vs non-LA speakers
+    """LA-area volunteers should score higher for CPP (LA) events than remote volunteers."""
+    # Compare average geo scores for LA vs non-LA volunteers
     la_regions = ["Los Angeles", "Los Angeles — West", "Los Angeles — North",
                   "Los Angeles — East", "Los Angeles — Long Beach"]
 
-    la_scores = event_matches[event_matches["speaker_region"].isin(la_regions)]["geographic_proximity"]
-    non_la_scores = event_matches[~event_matches["speaker_region"].isin(la_regions)]["geographic_proximity"]
+    la_scores = event_matches[event_matches["volunteer_region"].isin(la_regions)]["geographic_proximity"]
+    non_la_scores = event_matches[~event_matches["volunteer_region"].isin(la_regions)]["geographic_proximity"]
 
     assert la_scores.mean() > non_la_scores.mean(), (
         f"LA avg geo ({la_scores.mean():.3f}) should exceed non-LA ({non_la_scores.mean():.3f})"
     )
 
-    # LA speakers should have geo = 1.0 (same cluster)
-    assert (la_scores == 1.0).all(), "All LA speakers should have geo_proximity = 1.0 for CPP events"
+    # LA volunteers should have geo = 1.0 (same cluster)
+    assert (la_scores == 1.0).all(), "All LA volunteers should have geo_proximity = 1.0 for CPP events"
 
     # Remote speakers should have geo < 1.0
-    assert (non_la_scores < 1.0).all(), "Non-LA speakers should have geo < 1.0"
+    assert (non_la_scores < 1.0).all(), "Non-LA volunteers should have geo < 1.0"
 
-    print(f"  PASS: LA speakers geo avg: {la_scores.mean():.3f}, non-LA: {non_la_scores.mean():.3f}")
+    print(f"  PASS: LA volunteers geo avg: {la_scores.mean():.3f}, non-LA: {non_la_scores.mean():.3f}")
 
 
 def test_match_explanations(all_matches):
@@ -135,11 +135,11 @@ def test_match_explanations(all_matches):
     assert "Experience Bonus" in explanation
     assert "Score =" in explanation
 
-    # Should mention the speaker and opportunity by name
-    assert top["speaker"] in explanation
+    # Should mention the volunteer and opportunity by name
+    assert top["volunteer"] in explanation
     assert top["opportunity"] in explanation
 
-    print(f"  PASS: Explanation for {top['speaker']} -> {top['opportunity']} is well-structured")
+    print(f"  PASS: Explanation for {top['volunteer']} -> {top['opportunity']} is well-structured")
 
 
 def test_score_range(all_matches):
@@ -152,9 +152,9 @@ def test_score_range(all_matches):
 
 
 def test_no_duplicate_matches(all_matches):
-    """Each speaker-opportunity pair should appear at most once per type."""
+    """Each volunteer-opportunity pair should appear at most once per type."""
     dupes = all_matches.duplicated(
-        subset=["speaker", "opportunity", "opportunity_type"], keep=False
+        subset=["volunteer", "opportunity", "opportunity_type"], keep=False
     )
     dupe_count = dupes.sum()
     # Courses may have duplicate titles (different sections) so allow those
@@ -171,7 +171,7 @@ if __name__ == "__main__":
     print(f"Computed {len(all_matches)} total matches\n")
 
     tests = [
-        ("All speakers have matches", lambda: test_all_speakers_have_matches(data, all_matches)),
+        ("All volunteers have matches", lambda: test_all_speakers_have_matches(data, all_matches)),
         ("Dr. Yufan Lin -> AI Hackathon", lambda: test_yufan_lin_ai_hackathon(event_matches)),
         ("Dr. Yufan Lin -> Marketing courses", lambda: test_yufan_lin_marketing_courses(course_matches)),
         ("Greg Carter -> Qualitative events", lambda: test_greg_carter_qualitative(event_matches)),

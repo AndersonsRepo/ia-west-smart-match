@@ -94,7 +94,7 @@ def render_discovery_add_to_pipeline(discoveries_df):
             if st.button("➕ Add to Pipeline", key=f"add_pipe_{safe_key}_{idx}"):
                 entry = {
                     "id": f"DISC-{len(st.session_state.pipeline_data) + 1:03d}",
-                    "speaker": "Unassigned",
+                    "volunteer": "Unassigned",
                     "opportunity": row["opportunity_name"],
                     "university": row["university"],
                     "region": row["region"],
