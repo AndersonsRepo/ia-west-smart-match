@@ -8,3 +8,5 @@ dist/
 build/
 # .streamlit/ — needed for theme config on Streamlit Cloud
 .DS_Store
+.streamlit/secrets.toml
+supabase/.temp/
