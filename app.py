@@ -31,6 +31,8 @@ from features.interactive_pipeline import (
 from features.outreach_tracking import (
     init_outreach_state, render_outreach_actions,
     render_outreach_dashboard, auto_create_draft,
+    render_contact_info, render_send_actions,
+    render_manual_outreach_form, render_response_monitor,
 )
 from features.discovery_sim import (
     init_discovery_state, render_discovery_scan_button,
@@ -1068,12 +1070,21 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
 # TAB 4 — OUTREACH
 # ═══════════════════════════════════════════════
 with tab4:
-    st.markdown('<div class="section-header">✉️ Outreach Email Generator</div>', unsafe_allow_html=True)
-    st.caption("Generate personalized invitation emails — ready to send.")
+    st.markdown('<div class="section-header">✉️ Outreach Command Center</div>', unsafe_allow_html=True)
+    st.caption("Find contacts, send personalized emails, and track responses — all in one place.")
 
-    # Outreach dashboard KPIs
+    # Outreach dashboard KPIs + funnel
     render_outreach_dashboard()
 
+    # Response monitor
+    render_response_monitor()
+
+    # Manual add form
+    render_manual_outreach_form(speakers, cpp_events)
+
+    st.markdown("---")
+
+    # Filters
     col1, col2 = st.columns(2)
     with col1:
         selected_volunteer = st.selectbox(
@@ -1104,30 +1115,40 @@ with tab4:
             enriched["volunteer_company"] = volunteer_data.get("company", "")
 
             opp_data = {}
+            contact_email = ""
+            contact_name = ""
             if outreach_type == "event":
                 opp_rows = cpp_events[cpp_events["event_name"] == match_row["opportunity"]]
                 if not opp_rows.empty:
                     opp_data = opp_rows.iloc[0].to_dict()
+                    contact_email = opp_data.get("contact_email", "")
+                    contact_name = opp_data.get("contact_name", "")
             else:
                 opp_rows = cpp_courses[cpp_courses["title"] == match_row["opportunity"]]
                 if not opp_rows.empty:
                     opp_data = opp_rows.iloc[0].to_dict()
+                    contact_name = opp_data.get("instructor", "")
 
             email = generate_outreach(enriched, opp_data, outreach_type)
             score_pct = f"{match_row['match_score']:.0%}"
 
             with st.expander(f"✉️ **{match_row['volunteer']}** → {match_row['opportunity']} ({score_pct})"):
-                st.markdown(f'<div class="email-preview">{email}</div>', unsafe_allow_html=True)
-                st.download_button(
-                    label="📥 Download draft",
-                    data=email,
-                    file_name=f"outreach_{match_row['volunteer'].replace(' ', '_')}_{match_row['opportunity'][:30].replace(' ', '_')}.txt",
-                    mime="text/plain",
-                    key=f"dl_{match_row['volunteer']}_{match_row['opportunity']}_{outreach_type}",
-                )
-                st.markdown("---")
-                render_outreach_actions(match_row['volunteer'], match_row['opportunity'], outreach_type)
+                # Contact info
+                render_contact_info(contact_name, contact_email, match_row['opportunity'])
 
+                # Email preview
+                st.markdown(f'<div class="email-preview">{email}</div>', unsafe_allow_html=True)
+
+                # Send actions (mailto + copy + download)
+                st.markdown("")
+                render_send_actions(
+                    match_row['volunteer'], match_row['opportunity'], outreach_type,
+                    email, contact_email, contact_name,
+                )
+
+                st.markdown("---")
+                # Status tracking
+                render_outreach_actions(match_row['volunteer'], match_row['opportunity'], outreach_type)
 
 # ═══════════════════════════════════════════════
 # TAB 5 — PIPELINE

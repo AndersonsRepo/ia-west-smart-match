@@ -179,3 +179,33 @@ def generate_outreach(match_row: dict, opp_data: dict = None, opp_type: str = "e
     if opp_type == "course":
         return generate_course_outreach(match_row, opp_data)
     return generate_event_outreach(match_row, opp_data)
+
+
+import re
+from urllib.parse import quote
+
+
+def extract_subject_body(full_email: str) -> dict:
+    """Split a generated email into subject and body."""
+    lines = full_email.strip().split("\n")
+    subject = ""
+    body_start = 0
+    for i, line in enumerate(lines):
+        if line.startswith("Subject:"):
+            subject = line.replace("Subject:", "").strip()
+            body_start = i + 1
+            break
+    body = "\n".join(lines[body_start:]).strip()
+    return {"subject": subject, "body": body, "full_text": full_email}
+
+
+def generate_mailto_url(to: str, subject: str, body: str) -> str:
+    """Generate a mailto: URL with pre-filled fields."""
+    # Strip markdown bold markers for plain-text email
+    clean_body = body.replace("**", "").replace("*", "")
+    return f"mailto:{quote(to)}?subject={quote(subject)}&body={quote(clean_body)}"
+
+
+def validate_email(email: str) -> bool:
+    """Basic email format validation."""
+    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))

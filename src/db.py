@@ -226,3 +226,35 @@ def log_action_db(action: str, details: str, tab: str = "") -> None:
         "details": details,
         "tab": tab,
     }).execute()
+
+
+def upsert_outreach_db_extended(volunteer: str, opportunity: str, status: str,
+                                 sent_date: str | None = None, notes: str = "",
+                                 contact_email: str = "", contact_name: str = "",
+                                 responded_date: str | None = None) -> None:
+    """Upsert an outreach entry with extended contact fields."""
+    conn = _get_client()
+    data = {
+        "volunteer_name": volunteer,
+        "opportunity_name": opportunity,
+        "status": status,
+        "notes": notes,
+    }
+    if sent_date:
+        data["sent_date"] = sent_date
+    if contact_email:
+        data["contact_email"] = contact_email
+    if contact_name:
+        data["contact_name"] = contact_name
+    if responded_date:
+        data["responded_date"] = responded_date
+    conn.table("outreach_entries").upsert(
+        data, on_conflict="volunteer_name,opportunity_name"
+    ).execute()
+
+
+def get_pending_outreach_db() -> list[dict]:
+    """Get all outreach entries with status 'sent' for response monitoring."""
+    conn = _get_client()
+    rows = conn.table("outreach_entries").select("*").eq("status", "sent").order("sent_date").execute()
+    return rows.data
