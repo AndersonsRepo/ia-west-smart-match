@@ -1,13 +1,14 @@
 """Load and normalize all CSV data sources."""
 
 import pandas as pd
+from src.db import is_supabase_mode, load_volunteers_db
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 
 def load_volunteers() -> pd.DataFrame:
-    """Load volunteer profiles with normalized columns."""
+    """Load volunteer profiles from CSV, plus any self-registered from Supabase."""
     df = pd.read_csv(DATA_DIR / "speaker_profiles.csv")  # CSV name unchanged
     df.columns = [c.strip() for c in df.columns]
     df = df.rename(columns={
@@ -22,6 +23,23 @@ def load_volunteers() -> pd.DataFrame:
     df["expertise_list"] = df["expertise_tags"].apply(
         lambda x: [t.strip() for t in x.split(",") if t.strip()]
     )
+    # Merge self-registered volunteers from Supabase
+    if is_supabase_mode():
+        try:
+            db_df = load_volunteers_db()
+            new_vols = db_df[db_df["source"] == "self_registered"]
+            if not new_vols.empty:
+                # Ensure same columns, fill missing with defaults
+                for col in df.columns:
+                    if col not in new_vols.columns:
+                        new_vols[col] = ""
+                new_vols["expertise_list"] = new_vols["expertise_tags"].fillna("").apply(
+                    lambda x: [t.strip() for t in x.split(",") if t.strip()]
+                )
+                df = pd.concat([df, new_vols[df.columns]], ignore_index=True)
+                df = df.drop_duplicates(subset=["name"], keep="last")
+        except Exception:
+            pass
     return df
 
 
