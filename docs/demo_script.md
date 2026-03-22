@@ -9,7 +9,7 @@
 
 > "IA West has 18 board members and hundreds of volunteer opportunities across universities. Right now, matching is manual — someone reads a spreadsheet, guesses who might fit, and sends a generic email. Smart Match replaces that with AI-powered matching that scores every speaker against every opportunity in seconds."
 
-**Key stat to mention:** "We scored 900 speaker-opportunity pairs using TF-IDF cosine similarity and a 5-factor composite algorithm."
+**Key stat to mention:** "We scored 900 speaker-opportunity pairs using TF-IDF cosine similarity and a 6-factor composite algorithm."
 
 ---
 
@@ -48,7 +48,7 @@
 
 ### Show the Algorithm (15 seconds)
 - Point to the formula in the sidebar: `SCORE = 0.35 * Topic + 0.25 * Role + 0.20 * Geo + 0.10 * Calendar + 0.10 * Experience`
-- Mention: "Five weighted factors, computed with scikit-learn TF-IDF and cosine similarity"
+- Mention: "Six weighted factors, computed with scikit-learn TF-IDF and cosine similarity"
 
 ### Score Distribution (15 seconds)
 - Show the histogram — overlay of event vs. course scores
@@ -138,9 +138,37 @@
 
 ---
 
+## Tab 7: Executive Analytics (45 seconds)
+
+**Navigate to:** Executive tab
+
+### Strategic Insights (10 seconds)
+- Show the color-coded insight cards — severity from red (critical) to blue (informational)
+- "The system automatically generates actionable insights from the data — no AI hallucination, all deterministic."
+
+### ROI Projection (15 seconds)
+- Show the 3-year stacked bar chart: membership revenue + engagement value + labor savings
+- **Key stat:** "Year 3 cumulative value exceeds $72K from converting just 3-4% of pipeline entries to IA members"
+- Show the cumulative value line chart
+- Point to the assumptions expander: "Every number is transparent and adjustable"
+
+### Coverage Analysis (10 seconds)
+- Show the horizontal bar chart with coverage status colors
+- "35 out of 50 opportunities are well covered with 3+ strong matches. Zero gaps."
+
+### Volunteer Engagement Scores (10 seconds)
+- Show the leaderboard: Rob Kaiser at 81%, Dr. Yufan Lin near the top
+- "This composite score helps IA West prioritize which volunteers to engage first"
+
+> "This executive dashboard turns matching data into business strategy. IA West leadership can see the ROI case for Smart Match, identify coverage gaps before they become problems, and prioritize volunteer engagement — all without a single manual analysis."
+
+**Judging criteria hit:** Innovation (automated strategic insights), Impact (quantified ROI), Storytelling (executive-ready visuals)
+
+---
+
 ## Close (15 seconds)
 
-> "Smart Match turns IA West's volunteer matching from a manual spreadsheet exercise into an AI-powered CRM. 18 board members, 900 scored matches, personalized outreach, pipeline tracking, and automated university discovery — all in one dashboard. This is ready to deploy today and scale across IA West's entire regional footprint."
+> "Smart Match turns IA West's volunteer matching from a manual spreadsheet exercise into an AI-powered CRM. 18 board members, 900 scored matches, personalized outreach, pipeline tracking, automated discovery, and executive analytics with ROI projections — seven modules in one dashboard. This is ready to deploy today and scale across IA West's entire regional footprint."
 
 ---
 

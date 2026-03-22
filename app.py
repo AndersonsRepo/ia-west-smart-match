@@ -9,6 +9,10 @@ from src.db import is_supabase_mode
 from src.matching_engine import compute_matches, get_top_matches, explain_match
 from src.outreach_generator import generate_outreach
 from src.discovery import run_discovery_simulation, get_discovery_stats, get_expansion_roadmap
+from src.executive_analytics import (
+    compute_roi_projection, compute_coverage, compute_volunteer_scores,
+    generate_insights, compute_pipeline_timeline, compute_stage_velocity,
+)
 from src.pipeline_tracker import (
     generate_mock_pipeline, get_pipeline_summary, get_funnel_data,
     get_metrics_by_volunteer, get_metrics_by_event_type, get_metrics_by_region,
@@ -363,13 +367,14 @@ st.markdown(f"""
 # ─────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "👥 Volunteers",
     "🎓 Opportunities",
     "🎯 Smart Matches",
     "✉️ Outreach",
     "📈 Pipeline",
     "🔍 Discovery",
+    "📊 Executive",
 ])
 
 
@@ -1052,6 +1057,292 @@ with tab6:
                 </div>
             </div>
             """, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════
+# TAB 7 — EXECUTIVE ANALYTICS
+# ═══════════════════════════════════════════════
+with tab7:
+    st.markdown('<div class="section-header">📊 Executive Analytics & ROI</div>', unsafe_allow_html=True)
+    st.caption("Strategic insights, ROI projections, and coverage analysis for IA West leadership.")
+
+    pipeline = get_pipeline_df()
+
+    # Compute analytics
+    roi = compute_roi_projection(pipeline)
+    coverage = compute_coverage(all_matches)
+    vol_scores = compute_volunteer_scores(all_matches, pipeline)
+    insights = generate_insights(all_matches, pipeline, coverage, vol_scores)
+
+    # ── Strategic Insights ──
+    st.markdown('<div class="section-header">💡 Strategic Insights</div>', unsafe_allow_html=True)
+
+    severity_styles = {
+        "high": ("border-left: 3px solid #dc3545;", "🔴"),
+        "medium": ("border-left: 3px solid #ffc107;", "🟡"),
+        "low": ("border-left: 3px solid #28a745;", "🟢"),
+        "info": ("border-left: 3px solid #007bff;", "🔵"),
+    }
+
+    for insight in insights:
+        style, icon = severity_styles.get(insight["severity"], ("", "📌"))
+        st.markdown(f"""
+        <div class="match-card" style="{style}">
+            <div class="match-title">{icon} {insight['title']}</div>
+            <div class="match-subtitle" style="margin-top:0.4rem">{insight['detail']}</div>
+            <div style="margin-top:0.3rem"><span class="tag-pill">{insight['category']}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # ── ROI Projection ──
+    exec_sub1, exec_sub2, exec_sub3, exec_sub4 = st.tabs([
+        "💰 ROI Projection", "🎯 Coverage Analysis",
+        "👤 Volunteer Scores", "📅 Pipeline Trends",
+    ])
+
+    with exec_sub1:
+        st.markdown('<div class="section-header">💰 3-Year ROI Projection</div>', unsafe_allow_html=True)
+
+        # ROI KPIs
+        yr3 = roi["projections"][-1]
+        st.markdown(f"""
+        <div class="kpi-row">
+            <div class="kpi-card accent">
+                <div class="kpi-value">{roi['hours_saved_per_cycle']}h</div>
+                <div class="kpi-label">Hours Saved / Cycle</div>
+            </div>
+            <div class="kpi-card green">
+                <div class="kpi-value">${roi['labor_savings_per_cycle']:,}</div>
+                <div class="kpi-label">Labor Savings / Cycle</div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-value">{yr3['cumulative_members']}</div>
+                <div class="kpi-label">Projected Members (Yr 3)</div>
+            </div>
+            <div class="kpi-card purple">
+                <div class="kpi-value">${yr3['cumulative_value']:,}</div>
+                <div class="kpi-label">Cumulative Value (Yr 3)</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Stacked bar: revenue breakdown by year
+        proj_df = pd.DataFrame(roi["projections"])
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=proj_df["label"], y=proj_df["membership_revenue"],
+            name="Membership Revenue", marker_color="#007bff",
+        ))
+        fig.add_trace(go.Bar(
+            x=proj_df["label"], y=proj_df["engagement_value"],
+            name="Engagement Value", marker_color="#28a745",
+        ))
+        fig.add_trace(go.Bar(
+            x=proj_df["label"], y=proj_df["labor_savings"],
+            name="Labor Savings", marker_color="#ffc107",
+        ))
+        fig.update_layout(
+            barmode="stack", yaxis_title="Value ($)",
+            height=380, margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            font=dict(color="#a0b4c8"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Cumulative value line
+        fig2 = go.Figure()
+        fig2.add_trace(go.Scatter(
+            x=proj_df["label"], y=proj_df["cumulative_value"],
+            mode="lines+markers+text",
+            text=[f"${v:,}" for v in proj_df["cumulative_value"]],
+            textposition="top center",
+            line=dict(color="#7ec8e3", width=3),
+            marker=dict(size=10, color="#7ec8e3"),
+            fill="tozeroy", fillcolor="rgba(126,200,227,0.1)",
+        ))
+        fig2.update_layout(
+            yaxis_title="Cumulative Value ($)", xaxis_title="",
+            height=300, margin=dict(l=0, r=0, t=30, b=0),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            font=dict(color="#a0b4c8"),
+        )
+        st.plotly_chart(fig2, use_container_width=True)
+
+        # Assumptions
+        with st.expander("📐 ROI Model Assumptions"):
+            st.markdown(f"""
+            | Parameter | Value |
+            |-----------|-------|
+            | Annual membership dues | ${250} |
+            | Event engagement value | ${150}/participation |
+            | Manual match+outreach time | {45} min |
+            | Smart Match outreach time | {5} min |
+            | Coordinator hourly rate | ${35}/hr |
+            | Growth rate | 15%/year |
+            | Match cycles/year | 2 (spring + fall) |
+            """)
+
+    with exec_sub2:
+        st.markdown('<div class="section-header">🎯 Opportunity Coverage Analysis</div>', unsafe_allow_html=True)
+        st.caption(f"Score threshold: 50%. How well are opportunities covered by volunteer matches?")
+
+        # Coverage KPIs
+        st.markdown(f"""
+        <div class="kpi-row">
+            <div class="kpi-card green">
+                <div class="kpi-value">{coverage['well_covered']}</div>
+                <div class="kpi-label">Well Covered (3+ matches)</div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-value">{coverage['partial']}</div>
+                <div class="kpi-label">Partial (1-2 matches)</div>
+            </div>
+            <div class="kpi-card" style="border-left:3px solid #dc3545">
+                <div class="kpi-value">{coverage['gaps']}</div>
+                <div class="kpi-label">Coverage Gaps</div>
+            </div>
+            <div class="kpi-card accent">
+                <div class="kpi-value">{coverage['coverage_pct']:.0%}</div>
+                <div class="kpi-label">Full Coverage Rate</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Coverage breakdown chart
+        cov_df = coverage["details"]
+        status_colors = {"Well Covered": "#28a745", "Partial": "#ffc107", "Gap": "#dc3545"}
+        fig = px.bar(
+            cov_df.sort_values("best_score", ascending=True),
+            x="best_score", y="opportunity", orientation="h",
+            color="coverage_status",
+            color_discrete_map=status_colors,
+            labels={"best_score": "Best Match Score", "opportunity": ""},
+        )
+        fig.add_vline(x=0.5, line_dash="dash", line_color="rgba(255,255,255,0.3)")
+        fig.update_layout(
+            height=max(400, len(cov_df) * 22),
+            margin=dict(l=0, r=0, t=10, b=0),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+            font=dict(color="#a0b4c8"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Detail table
+        with st.expander("📋 Coverage Details"):
+            st.dataframe(
+                cov_df[["opportunity", "best_score", "avg_score", "strong_matches", "coverage_status"]],
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "best_score": st.column_config.ProgressColumn("Best Score", format="%.0f%%", min_value=0, max_value=1),
+                    "avg_score": st.column_config.ProgressColumn("Avg Score", format="%.0f%%", min_value=0, max_value=1),
+                },
+            )
+
+    with exec_sub3:
+        st.markdown('<div class="section-header">👤 Volunteer Engagement Scores</div>', unsafe_allow_html=True)
+        st.caption("Composite score: 40% avg match + 30% top match + 15% strong match count + 15% pipeline progress.")
+
+        # Engagement leaderboard
+        fig = px.bar(
+            vol_scores.head(15),
+            x="engagement_score", y="volunteer", orientation="h",
+            color="engagement_score",
+            color_continuous_scale=["#1a3a5c", "#007bff", "#28a745", "#7ec8e3"],
+            text=vol_scores.head(15)["engagement_score"].apply(lambda x: f"{x:.0%}"),
+        )
+        fig.update_layout(
+            height=500, margin=dict(l=0, r=0, t=10, b=0),
+            coloraxis_showscale=False,
+            yaxis=dict(autorange="reversed"),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(gridcolor="rgba(255,255,255,0.05)", title="Engagement Score"),
+            font=dict(color="#a0b4c8"),
+        )
+        fig.update_traces(textposition="outside", marker_line_width=0)
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Full table
+        st.dataframe(
+            vol_scores[["volunteer", "avg_match_score", "top_match_score",
+                        "strong_matches", "pipeline_entries", "engagement_score"]],
+            use_container_width=True, hide_index=True,
+            column_config={
+                "avg_match_score": st.column_config.ProgressColumn("Avg Match", format="%.0f%%", min_value=0, max_value=1),
+                "top_match_score": st.column_config.ProgressColumn("Top Match", format="%.0f%%", min_value=0, max_value=1),
+                "engagement_score": st.column_config.ProgressColumn("Engagement", format="%.0f%%", min_value=0, max_value=1),
+            },
+        )
+
+    with exec_sub4:
+        st.markdown('<div class="section-header">📅 Pipeline Trends</div>', unsafe_allow_html=True)
+
+        timeline = compute_pipeline_timeline(pipeline)
+        velocity = compute_stage_velocity(pipeline)
+
+        if not timeline.empty:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Cumulative Pipeline Growth**")
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(
+                    x=timeline["entry_date"], y=timeline["cumulative"],
+                    mode="lines", fill="tozeroy",
+                    line=dict(color="#007bff", width=2),
+                    fillcolor="rgba(0,123,255,0.1)",
+                ))
+                fig.update_layout(
+                    height=320, margin=dict(l=0, r=0, t=10, b=0),
+                    xaxis_title="", yaxis_title="Entries",
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                    font=dict(color="#a0b4c8"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.markdown("**Weekly New Entries**")
+                weekly = timeline.groupby("week")["new_entries"].sum().reset_index()
+                fig = px.bar(weekly, x="week", y="new_entries",
+                             labels={"week": "Week #", "new_entries": "New Entries"},
+                             color="new_entries",
+                             color_continuous_scale=["#1a3a5c", "#007bff", "#7ec8e3"])
+                fig.update_layout(
+                    height=320, margin=dict(l=0, r=0, t=10, b=0),
+                    coloraxis_showscale=False,
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                    font=dict(color="#a0b4c8"),
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        if not velocity.empty:
+            st.markdown("**Average Days in Pipeline by Stage**")
+            fig = px.bar(velocity, x="stage", y="avg_days",
+                         color="avg_days",
+                         color_continuous_scale=["#28a745", "#ffc107", "#dc3545"],
+                         text=velocity["avg_days"].apply(lambda x: f"{x:.0f}d"),
+                         labels={"avg_days": "Avg Days", "stage": ""})
+            fig.update_layout(
+                height=320, margin=dict(l=0, r=0, t=10, b=0),
+                coloraxis_showscale=False,
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                font=dict(color="#a0b4c8"),
+            )
+            fig.update_traces(textposition="outside", marker_line_width=0)
+            st.plotly_chart(fig, use_container_width=True)
 
 
 # ─────────────────────────────────────────────
