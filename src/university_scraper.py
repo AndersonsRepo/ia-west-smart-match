@@ -12,11 +12,23 @@ path to production (scraping templates).
 """
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 import re
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Polite scraping headers
+_HEADERS = {
+    "User-Agent": "IAWestSmartMatch/1.0 (university engagement CRM; contact: research@iawest.org)",
+    "Accept": "text/html",
+}
+_TIMEOUT = 8  # seconds per request
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
@@ -263,15 +275,185 @@ def discover_from_csv() -> list[DiscoveredOpportunity]:
     return results
 
 
-def discover_from_templates(templates: list[UniversityTemplate] = None,
-                            dry_run: bool = True) -> list[DiscoveredOpportunity]:
-    """
-    Scan university websites using templates. In dry_run mode (default),
-    returns the URLs that *would* be scraped. In production, this would
-    use requests + BeautifulSoup to parse event pages.
+def _scrape_page(url: str, selectors: dict, tmpl: UniversityTemplate) -> list[DiscoveredOpportunity]:
+    """Fetch a page and extract opportunities using CSS selectors."""
+    try:
+        resp = requests.get(url, headers=_HEADERS, timeout=_TIMEOUT, allow_redirects=True)
+        resp.raise_for_status()
+    except Exception as e:
+        logger.warning(f"Failed to fetch {url}: {e}")
+        return [DiscoveredOpportunity(
+            university=tmpl.name,
+            region=tmpl.region,
+            department=tmpl.department,
+            opportunity_name=f"[Unreachable] {url.split('/')[-2] or 'page'}",
+            opportunity_type="Scan Error",
+            fit_level="TBD",
+            description=f"Could not reach {url}: {e}",
+            source_url=url,
+            status="Error",
+        )]
 
-    This is the scaling path: add a new UniversityTemplate and the system
-    automatically discovers opportunities from that school.
+    soup = BeautifulSoup(resp.text, "html.parser")
+    results = []
+
+    # Extract page title
+    title_sel = selectors.get("title", "h1, h2")
+    page_title = ""
+    title_el = soup.select_one(title_sel)
+    if title_el:
+        page_title = title_el.get_text(strip=True)
+
+    # Extract description paragraphs
+    desc_sel = selectors.get("description", "div.page-content p, article p, main p")
+    desc_els = soup.select(desc_sel)[:3]
+    page_desc = " ".join(el.get_text(strip=True) for el in desc_els)[:300]
+
+    # Extract contact info if available
+    contact_sel = selectors.get("contact", "div.contact-info, .contact, footer")
+    contact_text = ""
+    contact_el = soup.select_one(contact_sel)
+    if contact_el:
+        contact_text = contact_el.get_text(strip=True)[:200]
+
+    # Extract event-like links from the page
+    event_keywords = [
+        "hackathon", "competition", "workshop", "speaker", "panel", "seminar",
+        "career", "networking", "conference", "symposium", "pitch", "mentor",
+        "lecture", "bootcamp", "summit", "expo", "fair", "forum", "challenge",
+    ]
+
+    # Find all links that look like event/opportunity pages
+    found_links = []
+    for a_tag in soup.find_all("a", href=True):
+        text = a_tag.get_text(strip=True).lower()
+        href = a_tag["href"].lower()
+        if any(kw in text or kw in href for kw in event_keywords):
+            full_text = a_tag.get_text(strip=True)
+            if len(full_text) > 3 and full_text not in [t for _, t in found_links]:
+                full_href = a_tag["href"]
+                if full_href.startswith("/"):
+                    full_href = tmpl.base_url + full_href
+                found_links.append((full_href, full_text))
+
+    # Build DiscoveredOpportunity from the page itself
+    if page_title and page_title.lower() not in ("events", "home", "contact us"):
+        # Determine fit level from keywords
+        combined = f"{page_title} {page_desc}".lower()
+        high_kw = ["hackathon", "ai", "competition", "innovation", "analytics", "research"]
+        fit = "High" if any(kw in combined for kw in high_kw) else "Medium"
+
+        # Determine type
+        type_map = [
+            ("hackathon", "Hackathon"), ("competition", "Competition"),
+            ("workshop", "Workshop"), ("speaker", "Speaker Series"),
+            ("career", "Career Event"), ("seminar", "Seminar"),
+            ("pitch", "Pitch Competition"), ("symposium", "Research Symposium"),
+        ]
+        opp_type = "Event"
+        for kw, otype in type_map:
+            if kw in combined:
+                opp_type = otype
+                break
+
+        results.append(DiscoveredOpportunity(
+            university=tmpl.name,
+            region=tmpl.region,
+            department=tmpl.department,
+            opportunity_name=page_title[:100],
+            opportunity_type=opp_type,
+            fit_level=fit,
+            description=page_desc or f"Discovered at {url}",
+            source_url=url,
+            contact_name=_extract_name(contact_text),
+            contact_email=_extract_email(resp.text),
+            volunteer_roles=_infer_roles(combined),
+            audience="University students and faculty",
+            status="Scraped",
+        ))
+
+    # Also create entries for discovered sub-links
+    for link_url, link_text in found_links[:5]:  # cap at 5 per page
+        combined = link_text.lower()
+        high_kw = ["hackathon", "ai", "competition", "innovation", "analytics", "research"]
+        fit = "High" if any(kw in combined for kw in high_kw) else "Medium"
+
+        results.append(DiscoveredOpportunity(
+            university=tmpl.name,
+            region=tmpl.region,
+            department=tmpl.department,
+            opportunity_name=link_text[:100],
+            opportunity_type="Discovered Link",
+            fit_level=fit,
+            description=f"Found on {url}",
+            source_url=link_url,
+            volunteer_roles=_infer_roles(combined),
+            audience="University students",
+            status="Scraped",
+        ))
+
+    # If nothing was extracted, still report the page was scanned
+    if not results:
+        results.append(DiscoveredOpportunity(
+            university=tmpl.name,
+            region=tmpl.region,
+            department=tmpl.department,
+            opportunity_name=f"[Scanned] {page_title or url.split('/')[-2] or 'page'}",
+            opportunity_type="Page Scanned",
+            fit_level="Low",
+            description=page_desc[:200] or f"No specific opportunities found at {url}",
+            source_url=url,
+            status="Scanned",
+        ))
+
+    return results
+
+
+def _extract_email(html_text: str) -> str:
+    """Extract first email address from HTML text."""
+    match = re.search(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', html_text)
+    return match.group(0) if match else ""
+
+
+def _extract_name(contact_text: str) -> str:
+    """Try to extract a person's name from contact text."""
+    if not contact_text:
+        return ""
+    # Look for patterns like "Contact: John Smith" or "Dr. Jane Doe"
+    patterns = [
+        r'(?:Contact|Director|Chair|Coordinator):\s*([A-Z][a-z]+ [A-Z][a-z]+)',
+        r'(Dr\.\s*[A-Z][a-z]+ [A-Z][a-z]+)',
+        r'([A-Z][a-z]+ [A-Z][a-z]+)',
+    ]
+    for pat in patterns:
+        m = re.search(pat, contact_text)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def _infer_roles(text: str) -> str:
+    """Infer volunteer roles from opportunity text."""
+    roles = []
+    role_map = {
+        "judge": "Judge", "mentor": "Mentor", "speaker": "Guest Speaker",
+        "panelist": "Panelist", "workshop": "Workshop Facilitator",
+        "coach": "Coach", "advisor": "Career Advisor",
+    }
+    for kw, role in role_map.items():
+        if kw in text:
+            roles.append(role)
+    return "; ".join(roles) if roles else "Guest Speaker; Mentor"
+
+
+def discover_from_templates(templates: list[UniversityTemplate] = None,
+                            dry_run: bool = False) -> list[DiscoveredOpportunity]:
+    """
+    Scan university websites using templates.
+
+    When dry_run=False (default), actually fetches pages and extracts
+    opportunities using BeautifulSoup. When dry_run=True, returns
+    placeholder entries showing what would be scraped.
     """
     templates = templates or UNIVERSITY_TEMPLATES
     results = []
@@ -280,7 +462,6 @@ def discover_from_templates(templates: list[UniversityTemplate] = None,
         urls = tmpl.get_event_urls()
         for url in urls:
             if dry_run:
-                # Show what would be scraped
                 results.append(DiscoveredOpportunity(
                     university=tmpl.name,
                     region=tmpl.region,
@@ -293,21 +474,24 @@ def discover_from_templates(templates: list[UniversityTemplate] = None,
                     status="Queued",
                 ))
             else:
-                # Production: fetch and parse
-                # page_opps = _scrape_page(url, tmpl.selectors)
-                # results.extend(page_opps)
-                pass
+                page_opps = _scrape_page(url, tmpl.selectors or {}, tmpl)
+                results.extend(page_opps)
 
     return results
 
 
-def run_full_discovery() -> pd.DataFrame:
+def run_full_discovery(live: bool = False) -> pd.DataFrame:
     """
-    Run the complete discovery pipeline: CSV seed data + template scan targets.
-    Returns a DataFrame ready for the dashboard.
+    Run the complete discovery pipeline.
+
+    Parameters
+    ----------
+    live : bool
+        If True, actually scrape university websites.
+        If False, show CSV seed data + queued scan targets.
     """
     csv_opps = discover_from_csv()
-    template_opps = discover_from_templates(dry_run=True)
+    template_opps = discover_from_templates(dry_run=not live)
     all_opps = csv_opps + template_opps
 
     df = pd.DataFrame([asdict(o) for o in all_opps])

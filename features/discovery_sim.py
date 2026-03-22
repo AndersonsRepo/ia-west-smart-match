@@ -16,43 +16,55 @@ def init_discovery_state():
 
 
 def render_discovery_scan_button() -> bool:
-    """Render the discovery scan trigger button with animated progress.
+    """Render the discovery scan trigger button with live scraping progress.
 
     Returns True if a scan was just completed, False otherwise.
     """
     init_discovery_state()
 
-    if st.button("🔍 Run Discovery Scan", key="discovery_scan_btn"):
+    if st.button("🔍 Run Live Discovery Scan", key="discovery_scan_btn"):
+        from src.university_scraper import discover_from_templates, _scrape_page
+
         templates = UNIVERSITY_TEMPLATES
-        total = len(templates)
+        total_urls = sum(len(t.get_event_urls()) for t in templates)
         progress_bar = st.progress(0)
         status_text = st.empty()
+        scanned = 0
 
-        for i, tmpl in enumerate(templates, start=1):
-            status_text.text(f"Scanning {tmpl.name}... ({i}/{total})")
-            progress_bar.progress(i / total)
-            time.sleep(0.4)
-
-        # Build results from templates
-        results = []
+        all_results = []
         for tmpl in templates:
-            results.append({
-                "university": tmpl.name,
-                "region": tmpl.region,
-                "department": tmpl.department,
-                "base_url": tmpl.base_url,
-                "event_urls": tmpl.get_event_urls(),
-                "course_catalog_url": tmpl.course_catalog_url or "",
-                "selectors": tmpl.selectors or {},
-                "scan_status": "Complete",
-            })
+            urls = tmpl.get_event_urls()
+            for url in urls:
+                status_text.text(f"🌐 Scraping {tmpl.short_name}: {url.split('/')[-2] or 'page'}... ({scanned + 1}/{total_urls})")
+                page_results = _scrape_page(url, tmpl.selectors or {}, tmpl)
+                all_results.extend(page_results)
+                scanned += 1
+                progress_bar.progress(scanned / total_urls)
 
-        st.session_state.discovery_results = results
+        # Store results as list of dicts for the session
+        st.session_state.discovery_results = [
+            {
+                "university": r.university,
+                "region": r.region,
+                "department": r.department,
+                "opportunity_name": r.opportunity_name,
+                "opportunity_type": r.opportunity_type,
+                "fit_level": r.fit_level,
+                "description": r.description,
+                "source_url": r.source_url,
+                "contact_name": r.contact_name,
+                "contact_email": r.contact_email,
+                "volunteer_roles": r.volunteer_roles,
+                "status": r.status,
+            }
+            for r in all_results
+        ]
         st.session_state.discovery_timestamp = datetime.now().isoformat()
+        st.session_state.live_scan_count = len(all_results)
 
         progress_bar.empty()
         status_text.empty()
-        st.toast("Discovery scan complete!")
+        st.toast(f"Live scan complete! Found {len(all_results)} opportunities across {len(templates)} universities.")
         return True
 
     return False
