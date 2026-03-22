@@ -14,6 +14,23 @@ from src.pipeline_tracker import (
     PIPELINE_STAGES, STAGE_COLORS, STAGE_CONVERSION_RATES,
 )
 from src.university_scraper import UNIVERSITY_TEMPLATES
+from features.match_approval import (
+    init_match_state, log_action, get_decision_badge,
+    render_match_actions, render_decision_summary,
+)
+from features.interactive_pipeline import (
+    init_pipeline_state, get_pipeline_df,
+    render_add_to_pipeline_form, render_pipeline_controls,
+    add_to_pipeline_from_match,
+)
+from features.outreach_tracking import (
+    init_outreach_state, render_outreach_actions,
+    render_outreach_dashboard, auto_create_draft,
+)
+from features.discovery_sim import (
+    init_discovery_state, render_discovery_scan_button,
+    render_discovery_add_to_pipeline,
+)
 
 # ─────────────────────────────────────────────
 # PAGE CONFIG
@@ -236,6 +253,14 @@ event_matches, course_matches, all_matches = compute_all_matches(
     speakers, cpp_events, cpp_courses, event_calendar
 )
 
+# ─────────────────────────────────────────────
+# SESSION STATE INITIALIZATION
+# ─────────────────────────────────────────────
+init_match_state()
+init_pipeline_state(speakers, cpp_events)
+init_outreach_state()
+init_discovery_state()
+
 
 # ─────────────────────────────────────────────
 # SIDEBAR
@@ -272,6 +297,23 @@ with st.sidebar:
     st.markdown("---")
     st.caption("CPP AI Hackathon 2026")
     st.caption("IA West · Community Growth & Membership")
+
+    # Activity feed
+    if st.session_state.action_log:
+        st.markdown("---")
+        st.markdown("##### 📋 Recent Activity")
+        action_icons = {
+            "Approved": "✅", "Rejected": "❌", "Shortlisted": "⭐",
+            "pipeline_add": "➕", "pipeline_advance": "⏩",
+            "pipeline_revert": "⏪", "pipeline_add_from_match": "🎯",
+            "pipeline_stage_edit": "✏️",
+            "outreach_sent": "📤", "outreach_responded": "📬",
+        }
+        for entry in reversed(st.session_state.action_log[-5:]):
+            icon = action_icons.get(entry["action"], "📌")
+            details = entry.get("details", entry.get("speaker", ""))
+            ts = entry["timestamp"].split("T")[-1][:8] if "T" in entry["timestamp"] else entry["timestamp"][-8:]
+            st.caption(f"{icon} {details} · {ts}")
 
 
 # ─────────────────────────────────────────────
@@ -597,6 +639,9 @@ with tab3:
                 )
                 st.plotly_chart(fig, use_container_width=True, key=f"radar_{idx}")
 
+            # Match approval buttons
+            render_match_actions(row["speaker"], row["opportunity"], idx)
+
     # Heatmap
     st.markdown('<div class="section-header">🗺️ Speaker × Opportunity Heatmap</div>', unsafe_allow_html=True)
     st.caption("Top 8 opportunities by average score.")
@@ -614,6 +659,9 @@ with tab3:
                       font=dict(color="#a0b4c8"))
     st.plotly_chart(fig, use_container_width=True)
 
+    # Decision summary
+    render_decision_summary(all_matches)
+
 
 # ═══════════════════════════════════════════════
 # TAB 4 — OUTREACH
@@ -621,6 +669,9 @@ with tab3:
 with tab4:
     st.markdown('<div class="section-header">✉️ Outreach Email Generator</div>', unsafe_allow_html=True)
     st.caption("Generate personalized invitation emails — ready to send.")
+
+    # Outreach dashboard KPIs
+    render_outreach_dashboard()
 
     col1, col2 = st.columns(2)
     with col1:
@@ -672,6 +723,8 @@ with tab4:
                     mime="text/plain",
                     key=f"dl_{match_row['speaker']}_{match_row['opportunity']}_{outreach_type}",
                 )
+                st.markdown("---")
+                render_outreach_actions(match_row['speaker'], match_row['opportunity'], outreach_type)
 
 
 # ═══════════════════════════════════════════════
@@ -681,7 +734,11 @@ with tab5:
     st.markdown('<div class="section-header">📈 Engagement Pipeline</div>', unsafe_allow_html=True)
     st.caption("Track the journey from opportunity identification to IA membership conversion.")
 
-    pipeline = generate_mock_pipeline(speakers, cpp_events)
+    # Add to pipeline form
+    with st.expander("➕ Add new pipeline entry", expanded=False):
+        render_add_to_pipeline_form(speakers, cpp_events)
+
+    pipeline = get_pipeline_df()
     summary = get_pipeline_summary(pipeline)
     funnel = get_funnel_data(pipeline)
 
@@ -822,19 +879,8 @@ with tab5:
     fig.update_traces(textposition="outside", marker_line_width=0)
     st.plotly_chart(fig, use_container_width=True)
 
-    with st.expander("📋 Full pipeline details"):
-        stage_filter = st.multiselect(
-            "Filter by stage",
-            options=PIPELINE_STAGES,
-            default=PIPELINE_STAGES,
-            key="pipeline_stage",
-        )
-        filtered_pipeline = pipeline[pipeline["stage"].isin(stage_filter)]
-        st.dataframe(
-            filtered_pipeline[["id", "speaker", "opportunity", "stage",
-                              "entry_date", "last_updated", "notes"]],
-            use_container_width=True, hide_index=True,
-        )
+    with st.expander("📋 Pipeline manager — edit stages, advance, or revert entries"):
+        render_pipeline_controls(pipeline)
 
 
 # ═══════════════════════════════════════════════
@@ -847,10 +893,18 @@ with tab6:
     disc_sub1, disc_sub2, disc_sub3 = st.tabs(["🔎 Discoveries", "🕷️ Scraping Templates", "🗺️ Expansion Roadmap"])
 
     with disc_sub1:
+        # Discovery scan button with progress animation
+        scan_completed = render_discovery_scan_button()
+
         discoveries = run_discovery_simulation()
         real_discoveries = discoveries[discoveries["status"] != "Queued"]
         scan_targets = discoveries[discoveries["status"] == "Queued"]
         stats = get_discovery_stats(discoveries)
+
+        if st.session_state.discovery_timestamp:
+            from datetime import datetime
+            ts = datetime.fromisoformat(st.session_state.discovery_timestamp)
+            st.caption(f"Last scan: {ts.strftime('%b %d, %Y at %I:%M %p')}")
 
         # KPI row
         st.markdown(f"""
@@ -935,6 +989,10 @@ with tab6:
                               "fit_level", "description", "status"]],
                 use_container_width=True, hide_index=True,
             )
+
+            # Add high-fit discoveries to pipeline
+            st.markdown('<div class="section-header">🎯 Add High-Fit Discoveries to Pipeline</div>', unsafe_allow_html=True)
+            render_discovery_add_to_pipeline(display_disc)
 
     with disc_sub2:
         st.markdown('<div class="section-header">🕷️ University Scraping Templates</div>', unsafe_allow_html=True)
