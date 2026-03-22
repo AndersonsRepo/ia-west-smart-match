@@ -3,15 +3,24 @@
 import streamlit as st
 from datetime import datetime
 
+from src.db import is_supabase_mode, get_outreach_entries_db, upsert_outreach_db
+
 
 def init_outreach_state():
     """Initialize outreach tracking in session state.
 
     Keys: "volunteer|opportunity" -> {"status": "draft"/"sent"/"responded",
     "sent_date": None, "notes": ""}
+    In Supabase mode, hydrates from the database on first load.
     """
     if "outreach_status" not in st.session_state:
-        st.session_state.outreach_status = {}
+        if is_supabase_mode():
+            try:
+                st.session_state.outreach_status = get_outreach_entries_db()
+            except Exception:
+                st.session_state.outreach_status = {}
+        else:
+            st.session_state.outreach_status = {}
     if "action_log" not in st.session_state:
         st.session_state.action_log = []
 
@@ -45,6 +54,11 @@ def auto_create_draft(volunteer: str, opportunity: str):
             "sent_date": None,
             "notes": "",
         }
+        if is_supabase_mode():
+            try:
+                upsert_outreach_db(volunteer, opportunity, "draft")
+            except Exception:
+                pass
 
 
 def render_outreach_actions(volunteer: str, opportunity: str, outreach_type: str):
@@ -87,6 +101,11 @@ def render_outreach_actions(volunteer: str, opportunity: str, outreach_type: str
                     "opportunity": opportunity,
                     "type": outreach_type,
                 })
+                if is_supabase_mode():
+                    try:
+                        upsert_outreach_db(volunteer, opportunity, "sent", entry["sent_date"])
+                    except Exception:
+                        pass
                 st.toast(f"Marked outreach to {volunteer} as sent!")
                 st.rerun()
 
@@ -101,6 +120,11 @@ def render_outreach_actions(volunteer: str, opportunity: str, outreach_type: str
                     "opportunity": opportunity,
                     "type": outreach_type,
                 })
+                if is_supabase_mode():
+                    try:
+                        upsert_outreach_db(volunteer, opportunity, "responded")
+                    except Exception:
+                        pass
                 st.toast(f"Response received from {volunteer}!")
                 st.rerun()
 

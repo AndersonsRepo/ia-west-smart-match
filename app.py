@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from src.data_loader import load_all
+from src.db import is_supabase_mode
 from src.matching_engine import compute_matches, get_top_matches, explain_match
 from src.outreach_generator import generate_outreach
 from src.discovery import run_discovery_simulation, get_discovery_stats, get_expansion_roadmap
@@ -299,6 +300,12 @@ with st.sidebar:
     st.markdown("---")
     st.caption("CPP AI Hackathon 2026")
     st.caption("IA West · Community Growth & Membership")
+
+    # Data mode indicator
+    if is_supabase_mode():
+        st.success("🔗 Connected to Supabase", icon="🔗")
+    else:
+        st.info("📁 Demo Mode (CSV)", icon="📁")
 
     # Activity feed
     if st.session_state.action_log:

@@ -9,6 +9,7 @@ import pandas as pd
 from datetime import datetime
 
 from src.pipeline_tracker import generate_mock_pipeline, PIPELINE_STAGES
+from src.db import is_supabase_mode, get_pipeline_entries_db, add_pipeline_entry_db, update_pipeline_stage_db, seed_pipeline_db, log_action_db
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
@@ -50,12 +51,32 @@ def init_pipeline_state(
     """Initialise ``st.session_state.pipeline_data`` with mock data.
 
     Only runs once per session — subsequent calls are no-ops so the user's
-    edits are preserved across reruns.
+    edits are preserved across reruns. In Supabase mode, loads from DB.
     """
     if "pipeline_data" not in st.session_state:
-        st.session_state.pipeline_data = generate_mock_pipeline(
-            speakers, cpp_events, all_matches=all_matches
-        ).to_dict("records")
+        if is_supabase_mode():
+            try:
+                entries = get_pipeline_entries_db()
+                if entries:
+                    st.session_state.pipeline_data = entries
+                else:
+                    # First run — seed Supabase with mock data
+                    mock = generate_mock_pipeline(
+                        speakers, cpp_events, all_matches=all_matches
+                    ).to_dict("records")
+                    st.session_state.pipeline_data = mock
+                    try:
+                        seed_pipeline_db(mock)
+                    except Exception:
+                        pass
+            except Exception:
+                st.session_state.pipeline_data = generate_mock_pipeline(
+                    speakers, cpp_events, all_matches=all_matches
+                ).to_dict("records")
+        else:
+            st.session_state.pipeline_data = generate_mock_pipeline(
+                speakers, cpp_events, all_matches=all_matches
+            ).to_dict("records")
 
 
 def get_pipeline_df() -> pd.DataFrame:
@@ -117,6 +138,11 @@ def render_add_to_pipeline_form(
             "pipeline_add",
             f"Added {new_entry['id']}: {speaker} → {opportunity} at {stage}",
         )
+        if is_supabase_mode():
+            try:
+                add_pipeline_entry_db(new_entry)
+            except Exception:
+                pass
         st.toast(f"Added {new_entry['id']} to pipeline", icon="✅")
 
 
@@ -260,6 +286,11 @@ def add_to_pipeline_from_match(speaker: str, opportunity: str) -> bool:
         "pipeline_add_from_match",
         f"Added {new_entry['id']}: {speaker} → {opportunity}",
     )
+    if is_supabase_mode():
+        try:
+            add_pipeline_entry_db(new_entry)
+        except Exception:
+            pass
     return True
 
 
@@ -277,12 +308,17 @@ def _find_record_index(record_id: str) -> int | None:
 def _update_stage(idx: int, new_stage: str) -> None:
     """Update a record's stage (and derived fields) in place."""
     st.session_state.pipeline_data[idx]["stage"] = new_stage
-    st.session_state.pipeline_data[idx]["stage_index"] = PIPELINE_STAGES.index(
-        new_stage
-    )
+    stage_index = PIPELINE_STAGES.index(new_stage)
+    st.session_state.pipeline_data[idx]["stage_index"] = stage_index
     st.session_state.pipeline_data[idx]["last_updated"] = datetime.now().strftime(
         "%Y-%m-%d"
     )
+    if is_supabase_mode():
+        try:
+            display_id = st.session_state.pipeline_data[idx].get("id", "")
+            update_pipeline_stage_db(display_id, new_stage, stage_index)
+        except Exception:
+            pass
 
 
 def _sync_editor_changes(

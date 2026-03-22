@@ -8,6 +8,8 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+from src.db import is_supabase_mode, get_match_decisions_db, set_match_decision_db, log_action_db
+
 
 # ─────────────────────────────────────────────
 # Constants
@@ -46,9 +48,16 @@ def init_match_state() -> None:
     """Initialize session state for match decisions and action logging.
 
     Safe to call multiple times — only sets defaults if keys are missing.
+    In Supabase mode, hydrates from the database on first load.
     """
     if "match_decisions" not in st.session_state:
-        st.session_state.match_decisions = {}
+        if is_supabase_mode():
+            try:
+                st.session_state.match_decisions = get_match_decisions_db()
+            except Exception:
+                st.session_state.match_decisions = {}
+        else:
+            st.session_state.match_decisions = {}
     if "action_log" not in st.session_state:
         st.session_state.action_log = []
 
@@ -72,6 +81,11 @@ def log_action(action: str, details: str, tab: str = "Smart Matches") -> None:
         "details": details,
         "tab": tab,
     })
+    if is_supabase_mode():
+        try:
+            log_action_db(action, details, tab)
+        except Exception:
+            pass
 
 
 # ─────────────────────────────────────────────
@@ -145,6 +159,11 @@ def render_match_actions(volunteer: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "approved"
+            if is_supabase_mode():
+                try:
+                    set_match_decision_db(volunteer, opportunity, "approved")
+                except Exception:
+                    pass
             log_action("Approved", f"{volunteer} → {opportunity}")
             st.toast(f"Approved: {volunteer} → {opportunity}", icon="✅")
             st.rerun()
@@ -157,6 +176,11 @@ def render_match_actions(volunteer: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "shortlisted"
+            if is_supabase_mode():
+                try:
+                    set_match_decision_db(volunteer, opportunity, "shortlisted")
+                except Exception:
+                    pass
             log_action("Shortlisted", f"{volunteer} → {opportunity}")
             st.toast(f"Shortlisted: {volunteer} → {opportunity}", icon="⭐")
             st.rerun()
@@ -169,6 +193,11 @@ def render_match_actions(volunteer: str, opportunity: str, idx: int) -> None:
             use_container_width=True,
         ):
             st.session_state.match_decisions[key] = "rejected"
+            if is_supabase_mode():
+                try:
+                    set_match_decision_db(volunteer, opportunity, "rejected")
+                except Exception:
+                    pass
             log_action("Rejected", f"{volunteer} → {opportunity}")
             st.toast(f"Rejected: {volunteer} → {opportunity}", icon="❌")
             st.rerun()
