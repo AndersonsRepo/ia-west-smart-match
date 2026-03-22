@@ -618,6 +618,25 @@ with tab3:
         },
     )
 
+    # Scoring methodology
+    with st.expander("📐 How Smart Match Scores Work", expanded=False):
+        st.markdown("""
+Each volunteer-opportunity pair is scored across **6 independent components**, then combined into a single composite score:
+
+| Component | Weight | Data Source | Method |
+|-----------|--------|-------------|--------|
+| **Topic Relevance** | 30% | Volunteer expertise tags vs. opportunity description | TF-IDF cosine similarity with bigrams — measures how well a volunteer's skills match what the opportunity needs |
+| **Role Fit** | 25% | Volunteer title/role vs. opportunity role requirements | Keyword taxonomy matching — "Judge", "Mentor", "Speaker" etc. matched against event needs |
+| **Geographic Proximity** | 20% | Volunteer metro region vs. opportunity location | Metro region clustering — volunteers near the event score higher (same region = 1.0, adjacent = 0.6) |
+| **Calendar Fit** | 10% | IA event calendar vs. opportunity region | Checks if an IA regional event overlaps with the opportunity's area, enabling a combined trip |
+| **Student Interest** | 10% | Course enrollment cap / event audience scope | Proxy for demand — high-enrollment courses and open-audience events score higher |
+| **Experience Level** | 5% | Volunteer title seniority keywords | Parses titles for seniority indicators (VP, Director, Senior → higher score) |
+
+**Composite formula:** `SCORE = 0.30×Topic + 0.25×Role + 0.20×Geo + 0.10×Calendar + 0.10×Interest + 0.05×Experience`
+
+Scores range from 0% (no match) to 100% (perfect match). A score above **50%** indicates a strong pairing worth pursuing.
+""")
+
     # Match detail cards with radar charts
     st.markdown('<div class="section-header">🔍 Match Explanations</div>', unsafe_allow_html=True)
     st.caption("Click any match to see why the algorithm recommended it.")
@@ -665,19 +684,54 @@ with tab3:
 
     # Heatmap
     st.markdown('<div class="section-header">🗺️ Volunteer × Opportunity Heatmap</div>', unsafe_allow_html=True)
-    st.caption("Top 8 opportunities by average score.")
-    top_opps = all_matches.groupby("opportunity")["match_score"].mean().nlargest(8).index.tolist()
+    st.caption("Top 10 opportunities by average score. Cell values show match percentage.")
+    top_opps = all_matches.groupby("opportunity")["match_score"].mean().nlargest(10).index.tolist()
     heatmap_data = all_matches[all_matches["opportunity"].isin(top_opps)]
     pivot = heatmap_data.pivot_table(
         index="volunteer", columns="opportunity", values="match_score", aggfunc="first"
+    ).fillna(0)
+
+    # Shorten opportunity names for readability
+    short_names = {name: (name[:30] + "…" if len(name) > 30 else name) for name in pivot.columns}
+    pivot = pivot.rename(columns=short_names)
+
+    # Annotated heatmap with percentage labels
+    text_matrix = (pivot * 100).round(0).astype(int).astype(str) + "%"
+    fig = go.Figure(data=go.Heatmap(
+        z=pivot.values,
+        x=pivot.columns.tolist(),
+        y=pivot.index.tolist(),
+        text=text_matrix.values,
+        texttemplate="%{text}",
+        textfont=dict(size=11, color="white"),
+        colorscale=[
+            [0.0, "#0e1117"],
+            [0.3, "#1a3a5c"],
+            [0.5, "#2563eb"],
+            [0.7, "#f59e0b"],
+            [0.85, "#ef4444"],
+            [1.0, "#ff2d55"],
+        ],
+        colorbar=dict(
+            title="Score",
+            tickformat=".0%",
+            tickvals=[0, 0.25, 0.5, 0.75, 1.0],
+            ticktext=["0%", "25%", "50%", "75%", "100%"],
+            len=0.8,
+        ),
+        hovertemplate="<b>%{y}</b> → %{x}<br>Score: %{z:.0%}<extra></extra>",
+        xgap=2,
+        ygap=2,
+    ))
+    fig.update_layout(
+        height=max(400, len(pivot) * 35 + 100),
+        margin=dict(l=0, r=0, t=10, b=120),
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="#a0b4c8"),
+        xaxis=dict(side="bottom", tickangle=-45),
+        yaxis=dict(autorange="reversed"),
     )
-    fig = px.imshow(
-        pivot, color_continuous_scale=["#0e1117", "#1a3a5c", "#28a745", "#7ec8e3"], aspect="auto",
-        labels={"color": "Score"},
-    )
-    fig.update_layout(height=450, margin=dict(l=0, r=0, t=10, b=0),
-                      paper_bgcolor="rgba(0,0,0,0)",
-                      font=dict(color="#a0b4c8"))
     st.plotly_chart(fig, use_container_width=True)
 
     # Decision summary
