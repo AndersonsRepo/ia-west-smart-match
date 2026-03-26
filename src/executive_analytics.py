@@ -278,3 +278,46 @@ def compute_stage_velocity(pipeline: pd.DataFrame) -> pd.DataFrame:
     velocity = velocity.sort_values("stage_idx").drop(columns="stage_idx")
 
     return velocity
+
+
+def generate_insights_ai(
+    all_matches: pd.DataFrame,
+    pipeline: pd.DataFrame,
+    coverage: dict,
+    volunteer_scores: pd.DataFrame,
+) -> str | None:
+    """Generate AI-powered strategic insights. Returns None if unavailable."""
+    try:
+        from src.ai_helpers import ai_strategic_insights
+        
+        high_quality_pct = len(all_matches[all_matches["match_score"] >= 0.6]) / len(all_matches) if len(all_matches) > 0 else 0
+        
+        top_region = ""
+        top_region_avg = 0.0
+        if "volunteer_region" in all_matches.columns:
+            region_means = all_matches.groupby("volunteer_region")["match_score"].mean()
+            if not region_means.empty:
+                top_region = region_means.idxmax()
+                top_region_avg = region_means.max()
+        
+        engaged_rate = 0.0
+        if not pipeline.empty and "stage_index" in pipeline.columns:
+            engaged_rate = len(pipeline[pipeline["stage_index"] >= 2]) / len(pipeline)
+        
+        underutilized = volunteer_scores.head(5)
+        underutilized = underutilized[underutilized.get("pipeline_entries", 0) == 0]
+        underutilized_names = underutilized["volunteer"].tolist() if not underutilized.empty else []
+        
+        return ai_strategic_insights(
+            total_matches=len(all_matches),
+            high_quality_pct=high_quality_pct,
+            coverage_gaps=coverage.get("gaps", 0),
+            coverage_pct=coverage.get("coverage_pct", 0),
+            top_region=top_region,
+            top_region_avg=top_region_avg,
+            pipeline_count=len(pipeline),
+            engaged_rate=engaged_rate,
+            underutilized_names=underutilized_names,
+        )
+    except Exception:
+        return None

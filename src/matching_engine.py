@@ -428,3 +428,27 @@ def explain_match(row: pd.Series) -> str:
                  f"= **{row['match_score']:.3f}***")
 
     return "\n".join(parts)
+
+
+def explain_match_ai(row: pd.Series) -> str | None:
+    """Generate an AI-powered match explanation. Returns None if unavailable."""
+    try:
+        from src.ai_helpers import ai_explain_match
+        return ai_explain_match(
+            volunteer_name=row["volunteer"],
+            volunteer_role=row.get("volunteer_role", ""),
+            volunteer_expertise=row.get("volunteer_expertise", ""),
+            volunteer_region=row.get("volunteer_region", ""),
+            opportunity=row["opportunity"],
+            opp_type=row.get("opportunity_type", "event"),
+            opp_roles=row.get("opp_roles", ""),
+            topic=row["topic_relevance"],
+            role_fit=row["role_fit"],
+            geo=row["geographic_proximity"],
+            calendar=row["calendar_fit"],
+            interest=row.get("student_interest", 0.5),
+            experience=row["historical_bonus"],
+            composite=row["match_score"],
+        )
+    except Exception:
+        return None

@@ -209,3 +209,27 @@ def generate_mailto_url(to: str, subject: str, body: str) -> str:
 def validate_email(email: str) -> bool:
     """Basic email format validation."""
     return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
+
+
+def generate_outreach_ai(match_row: dict, opp_data: dict = None, opp_type: str = "event") -> str | None:
+    """Generate an AI-personalized outreach email. Returns None if unavailable."""
+    try:
+        from src.ai_helpers import ai_personalize_email
+        contact_name = ""
+        if opp_data:
+            contact_name = opp_data.get("contact_name", opp_data.get("instructor", ""))
+        return ai_personalize_email(
+            volunteer_name=match_row.get("volunteer", ""),
+            volunteer_title=match_row.get("volunteer_title", "Industry Leader"),
+            volunteer_company=match_row.get("volunteer_company", ""),
+            volunteer_expertise=match_row.get("volunteer_expertise", ""),
+            volunteer_role=match_row.get("volunteer_role", "Board Member"),
+            volunteer_region=match_row.get("volunteer_region", ""),
+            opportunity=match_row.get("opportunity", ""),
+            opp_type=opp_type,
+            contact_name=contact_name,
+            match_score=match_row.get("match_score", 0),
+            topic_score=match_row.get("topic_relevance", 0),
+        )
+    except Exception:
+        return None

@@ -13,6 +13,11 @@ from src.executive_analytics import (
     compute_roi_projection, compute_coverage, compute_volunteer_scores,
     generate_insights, compute_pipeline_timeline, compute_stage_velocity,
 )
+from src.ai_helpers import ai_enabled, ai_answer_question
+from src.matching_engine import explain_match_ai
+from src.outreach_generator import generate_outreach_ai
+from src.executive_analytics import generate_insights_ai
+from src.event_scorecard import compute_event_scorecards, get_scorecard_summary
 from src.pipeline_tracker import (
     generate_mock_pipeline, get_pipeline_summary, get_funnel_data,
     get_metrics_by_volunteer, get_metrics_by_event_type, get_metrics_by_region,
@@ -327,12 +332,23 @@ with st.sidebar:
         <span style="background:#3F4F75;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Plotly</span>
         <span style="background:#3ECF8E;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Supabase</span>
         <span style="background:#E34F26;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">BeautifulSoup</span>
+        <span style="background:#D97706;color:white;padding:2px 8px;border-radius:10px;font-size:0.72em">Claude AI</span>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("---")
     st.caption("CPP AI Hackathon 2026")
     st.caption("IA West · Community Growth & Membership")
+
+    st.markdown("---")
+    ai_mode = st.toggle("🤖 AI-Enhanced Mode", value=False, key="ai_mode",
+                         help="Enable Claude AI for richer match explanations, personalized emails, and strategic insights")
+    if ai_mode:
+        if ai_enabled():
+            st.success("AI features active", icon="✅")
+        else:
+            st.warning("Add ANTHROPIC_API_KEY to secrets", icon="⚠️")
+            ai_mode = False
 
     # Data mode indicator
     if is_supabase_mode():
@@ -518,6 +534,39 @@ Every match includes a full human-readable explanation — no black-box decision
 # ═══════════════════════════════════════════════
 # TAB 1 — VOLUNTEER PROFILES
 # ═══════════════════════════════════════════════
+    # ── AI Chat Interface ──
+    if st.session_state.get("ai_mode") and ai_enabled():
+        st.markdown("---")
+        st.markdown('<div class="section-header">🤖 Ask AI About Your Data</div>', unsafe_allow_html=True)
+        st.caption("Ask questions about matches, volunteers, opportunities, or pipeline performance.")
+        
+        # Build a data summary for context
+        data_summary = f"""Volunteers: {len(speakers)} board members across regions: {', '.join(speakers['metro_region'].unique())}
+Top 5 volunteers by name: {', '.join(speakers['name'].head(5).tolist())}
+Opportunities: {len(cpp_events)} events + {len(cpp_courses)} courses at Cal Poly Pomona
+Top match: {all_matches.iloc[0]['volunteer']} → {all_matches.iloc[0]['opportunity']} ({all_matches.iloc[0]['match_score']:.0%})
+Average match score: {all_matches['match_score'].mean():.0%}
+Matches above 60%: {len(all_matches[all_matches['match_score'] >= 0.6])}
+Pipeline entries: {len(pipeline)}
+Pipeline stages: {', '.join(f"{stage}: {len(pipeline[pipeline['stage']==stage])}" for stage in pipeline['stage'].unique())}""" if not pipeline.empty else f"""Volunteers: {len(speakers)} board members
+Opportunities: {len(cpp_events)} events + {len(cpp_courses)} courses
+Top match: {all_matches.iloc[0]['volunteer']} → {all_matches.iloc[0]['opportunity']} ({all_matches.iloc[0]['match_score']:.0%})
+Average match score: {all_matches['match_score'].mean():.0%}
+Matches above 60%: {len(all_matches[all_matches['match_score'] >= 0.6])}"""
+        
+        user_question = st.text_input("💬 Ask a question...", key="ai_chat_input",
+                                       placeholder="e.g., Who is the best match for the AI Hackathon?")
+        if user_question:
+            with st.spinner("Thinking..."):
+                answer = ai_answer_question(user_question, data_summary)
+            if answer:
+                st.markdown(f"""
+                <div class="match-card" style="border-left: 3px solid #007bff;">
+                    <div class="match-subtitle">{answer}</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+
 with tab1:
     st.markdown('<div class="section-header">👥 IA West Board Members</div>', unsafe_allow_html=True)
     st.caption(f"The supply side — {len(speakers)} board member volunteers with expertise, roles, and metro regions.")
@@ -872,8 +921,17 @@ Scores range from 0% (no match) to 100% (perfect match). A score above **50%** i
                          expanded=(i == 0)):
             c1, c2 = st.columns([1, 2])
             with c1:
-                explanation = explain_match(row)
-                st.markdown(explanation)
+                ai_explanation = None
+                if st.session_state.get("ai_mode") and ai_enabled():
+                    ai_explanation = explain_match_ai(row)
+                if ai_explanation:
+                    st.markdown("🤖 **AI Analysis**")
+                    st.markdown(ai_explanation)
+                    with st.expander("📐 Deterministic breakdown", expanded=False):
+                        st.markdown(explain_match(row))
+                else:
+                    explanation = explain_match(row)
+                    st.markdown(explanation)
             with c2:
                 categories = ["Topic", "Role Fit", "Geography", "Calendar", "Interest", "Experience"]
                 values = [row["topic_relevance"], row["role_fit"],
@@ -1129,7 +1187,12 @@ with tab4:
                     opp_data = opp_rows.iloc[0].to_dict()
                     contact_name = opp_data.get("instructor", "")
 
-            email = generate_outreach(enriched, opp_data, outreach_type)
+            ai_email = None
+            if st.session_state.get("ai_mode") and ai_enabled():
+                ai_email = generate_outreach_ai(enriched, opp_data, outreach_type)
+            email = ai_email if ai_email else generate_outreach(enriched, opp_data, outreach_type)
+            if ai_email:
+                st.caption("🤖 AI-personalized email")
             score_pct = f"{match_row['match_score']:.0%}"
 
             with st.expander(f"✉️ **{match_row['volunteer']}** → {match_row['opportunity']} ({score_pct})"):
@@ -1594,6 +1657,20 @@ with tab7:
         "info": ("border-left: 3px solid #007bff;", "🔵"),
     }
 
+    ai_insight_text = None
+    if st.session_state.get("ai_mode") and ai_enabled():
+        ai_insight_text = generate_insights_ai(all_matches, pipeline, coverage, vol_scores)
+    
+    if ai_insight_text:
+        st.markdown("""
+        <div class="match-card" style="border-left: 3px solid #9b59b6;">
+            <div class="match-title">🤖 AI Strategic Analysis</div>
+            <div class="match-subtitle" style="margin-top:0.4rem; white-space: pre-wrap;">{0}</div>
+            <div style="margin-top:0.3rem"><span class="tag-pill">AI-Powered</span></div>
+        </div>
+        """.format(ai_insight_text.replace('\n', '<br>')), unsafe_allow_html=True)
+        st.markdown("")
+
     for insight in insights:
         style, icon = severity_styles.get(insight["severity"], ("", "📌"))
         st.markdown(f"""
@@ -1605,9 +1682,9 @@ with tab7:
         """, unsafe_allow_html=True)
 
     # ── ROI Projection ──
-    exec_sub1, exec_sub2, exec_sub3, exec_sub4 = st.tabs([
+    exec_sub1, exec_sub2, exec_sub3, exec_sub4, exec_sub5 = st.tabs([
         "💰 ROI Projection", "🎯 Coverage Analysis",
-        "👤 Volunteer Scores", "📅 Pipeline Trends",
+        "👤 Volunteer Scores", "📅 Pipeline Trends", "📋 Event Scorecards",
     ])
 
     with exec_sub1:
@@ -1867,6 +1944,130 @@ with tab7:
             fig.update_traces(textposition="outside", marker_line_width=0)
             st.plotly_chart(fig, use_container_width=True)
 
+    with exec_sub5:
+        st.markdown('<div class="section-header">📋 Event Impact Scorecards</div>', unsafe_allow_html=True)
+        st.caption("Per-opportunity scorecard for IA chapter leadership — match quality, conversion potential, and strategic value.")
+
+        # Compute scorecards for events and courses
+        event_scorecards = compute_event_scorecards(cpp_events, all_matches, opp_type="event")
+        course_scorecards = compute_event_scorecards(cpp_courses, all_matches, opp_type="course")
+        all_scorecards = pd.concat([event_scorecards, course_scorecards], ignore_index=True)
+        all_scorecards = all_scorecards.sort_values("impact_score", ascending=False).reset_index(drop=True)
+
+        sc_summary = get_scorecard_summary(all_scorecards)
+
+        # KPI row
+        st.markdown(f"""
+        <div class="kpi-row">
+            <div class="kpi-card accent">
+                <div class="kpi-value">{sc_summary['total']}</div>
+                <div class="kpi-label">Opportunities Scored</div>
+            </div>
+            <div class="kpi-card green">
+                <div class="kpi-value">{sc_summary['high']}</div>
+                <div class="kpi-label">High Priority</div>
+            </div>
+            <div class="kpi-card orange">
+                <div class="kpi-value">{sc_summary['medium']}</div>
+                <div class="kpi-label">Medium Priority</div>
+            </div>
+            <div class="kpi-card purple">
+                <div class="kpi-value">{sc_summary.get('total_est_members', 0)}</div>
+                <div class="kpi-label">Est. New Members</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Impact score distribution
+        sc_col1, sc_col2 = st.columns(2)
+        with sc_col1:
+            priority_colors = {"High": "#28a745", "Medium": "#ffc107", "Low": "#dc3545"}
+            fig = px.bar(
+                all_scorecards,
+                x="opportunity", y="impact_score",
+                color="priority",
+                color_discrete_map=priority_colors,
+                text=all_scorecards["impact_score"].apply(lambda x: f"{x:.0%}"),
+                labels={"impact_score": "Impact Score", "opportunity": ""},
+            )
+            fig.update_layout(
+                title_text="Impact Score by Opportunity", title_font_size=14, title_x=0.5,
+                height=400, margin=dict(l=0, r=0, t=40, b=120),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)"),
+                font=dict(color="#a0b4c8"),
+            )
+            fig.update_traces(textposition="outside", marker_line_width=0)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with sc_col2:
+            # Score component breakdown for top opportunities
+            top_sc = all_scorecards.head(10)
+            fig = go.Figure()
+            fig.add_trace(go.Bar(name="Match Quality", x=top_sc["opportunity"], y=top_sc["match_quality"], marker_color="#007bff"))
+            fig.add_trace(go.Bar(name="Conversion Potential", x=top_sc["opportunity"], y=top_sc["conversion_potential"], marker_color="#28a745"))
+            fig.add_trace(go.Bar(name="Strategic Value", x=top_sc["opportunity"], y=top_sc["strategic_value"], marker_color="#ffc107"))
+            fig.update_layout(
+                barmode="group",
+                title_text="Score Components (Top 10)", title_font_size=14, title_x=0.5,
+                height=400, margin=dict(l=0, r=0, t=40, b=120),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                xaxis=dict(tickangle=-45, gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(gridcolor="rgba(255,255,255,0.05)", title="Score"),
+                font=dict(color="#a0b4c8"),
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Detailed scorecard cards for top opportunities
+        st.markdown('<div class="section-header">🏆 Top Opportunities by Impact</div>', unsafe_allow_html=True)
+        for _, sc in all_scorecards.head(8).iterrows():
+            priority_style = {"High": "border-left:3px solid #28a745", "Medium": "border-left:3px solid #ffc107", "Low": "border-left:3px solid #dc3545"}.get(sc["priority"], "")
+            priority_badge = {"High": '<span class="fit-high">High Priority</span>', "Medium": '<span class="fit-medium">Medium Priority</span>', "Low": '<span class="fit-low">Low Priority</span>'}.get(sc["priority"], "")
+
+            st.markdown(f"""
+            <div class="match-card" style="{priority_style}">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div class="match-title">{sc['opportunity']}</div>
+                    <div>{priority_badge} <span style="color:#7ec8e3;font-weight:600;margin-left:8px">{sc['impact_score']:.0%}</span></div>
+                </div>
+                <div class="match-subtitle" style="margin-top:0.5rem">
+                    <strong>Best volunteer:</strong> {sc['best_volunteer']} ({sc['best_match_score']:.0%} match) &nbsp;|&nbsp;
+                    <strong>Strong matches:</strong> {sc['strong_matches']} &nbsp;|&nbsp;
+                    <strong>Roles:</strong> {sc['roles_available']}
+                </div>
+                <div style="margin-top:0.5rem;display:flex;gap:1.5rem;font-size:0.82em;color:#8899aa">
+                    <span>📊 Match Quality: <strong style="color:#7ec8e3">{sc['match_quality']:.0%}</strong></span>
+                    <span>🔄 Conversion: <strong style="color:#7ec8e3">{sc['conversion_potential']:.0%}</strong></span>
+                    <span>⭐ Strategic: <strong style="color:#7ec8e3">{sc['strategic_value']:.0%}</strong></span>
+                    <span>👤 Est. Members: <strong style="color:#7ec8e3">{sc['est_new_members']}</strong></span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Full scorecard table
+        with st.expander("📋 Full Scorecard Table"):
+            display_cols = ["opportunity", "type", "category", "priority", "impact_score",
+                           "match_quality", "conversion_potential", "strategic_value",
+                           "strong_matches", "best_volunteer", "est_new_members"]
+            st.dataframe(
+                all_scorecards[display_cols],
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "impact_score": st.column_config.ProgressColumn("Impact", format="%.0f%%", min_value=0, max_value=1),
+                    "match_quality": st.column_config.ProgressColumn("Match", format="%.0f%%", min_value=0, max_value=1),
+                    "conversion_potential": st.column_config.ProgressColumn("Conv.", format="%.0f%%", min_value=0, max_value=1),
+                    "strategic_value": st.column_config.ProgressColumn("Strategy", format="%.0f%%", min_value=0, max_value=1),
+                },
+            )
+
+        # Export
+        csv_sc = all_scorecards.to_csv(index=False)
+        st.download_button("📥 Export Scorecards (CSV)", data=csv_sc, file_name="ia_west_event_scorecards.csv", mime="text/csv")
+
 
 # ─────────────────────────────────────────────
 # SYSTEM ARCHITECTURE + FOOTER
@@ -1881,7 +2082,7 @@ with st.expander("🏗️ System Architecture", expanded=False):
     <div style="background:linear-gradient(135deg,#1a3a5c,#2563eb);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
         <div style="font-size:1.4rem">👥</div>
         <div style="color:#fff;font-weight:600;font-size:0.85rem">Supply Side</div>
-        <div style="color:#8899aa;font-size:0.72rem">19 Board Members<br>Expertise Tags</div>
+        <div style="color:#8899aa;font-size:0.72rem">18 Board Members<br>Expertise Tags</div>
     </div>
     <div style="display:flex;align-items:center;color:#4a5568;font-size:1.2rem">→</div>
     <div style="background:linear-gradient(135deg,#1a3a5c,#059669);border-radius:12px;padding:1rem 1.2rem;text-align:center;min-width:130px;border:1px solid rgba(255,255,255,0.1)">
